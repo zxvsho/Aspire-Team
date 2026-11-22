@@ -51,27 +51,46 @@ if (Get-Command rustc -ErrorAction SilentlyContinue) {
     exit 1
 }
 
-# ---------- Aurelia ----------
+# ---------- Aurelia (binario precompilado para Windows) ----------
 if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
-    Info "Instalando Aurelia..."
+    Info "Instalando Aurelia (binario precompilado para Windows)..."
     $aureliaInstalled = $false
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        try {
-            winget install --id Drackrath.Aurelia -e --silent --accept-package-agreements --accept-source-agreements 2>$null
-            if (Get-Command aurelia -ErrorAction SilentlyContinue) {
-                $aureliaInstalled = $true
-            }
-        } catch {
-            Warn "winget falló para Aurelia..."
+
+    # Detectar arquitectura
+    $arch = if ([Environment]::Is64BitOperatingSystem) {
+        if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x86_64" }
+    } else { "x86_64" }
+
+    # Intentar descargar binario precompilado desde GitHub Releases
+    try {
+        $releaseUrl = "https://github.com/Drackrath/Aurelia/releases/latest/download/aurelia_windows_$arch.exe"
+        $aureliaPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps\aurelia.exe"
+        # Alternativa: instalar en ~/.cargo/bin
+        $aureliaPath = "$env:USERPROFILE\.cargo\bin\aurelia.exe"
+        if (-not (Test-Path "$env:USERPROFILE\.cargo\bin")) {
+            New-Item -ItemType Directory -Path "$env:USERPROFILE\.cargo\bin" -Force | Out-Null
         }
+        Invoke-WebRequest -Uri $releaseUrl -OutFile $aureliaPath -ErrorAction Stop
+        Info "Aurelia descargado desde GitHub Releases ($arch)."
+        $aureliaInstalled = $true
+    } catch {
+        Warn "No se pudo descargar el binario precompilado. Intentando cargo install..."
     }
+
+    # Fallback: cargo install
     if (-not $aureliaInstalled) {
         try {
-            cargo install aurelia
+            cargo install aurelia-steam
             $aureliaInstalled = $true
         } catch {
-            Fail "No se pudo instalar Aurelia."
-            exit 1
+            Warn "cargo install falló. Intentando aurelia..."
+            try {
+                cargo install aurelia
+                $aureliaInstalled = $true
+            } catch {
+                Fail "No se pudo instalar Aurelia."
+                exit 1
+            }
         }
     }
 } else {
