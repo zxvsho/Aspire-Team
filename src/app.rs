@@ -679,6 +679,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Char('?') => { self.overlay = Overlay::Help; return; }
             KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
             KeyCode::Char('g') => { self.g_pending = true; return; }
+            KeyCode::Char(c @ '1'..='8') => { self.goto(c as usize - '1' as usize); return; }
             KeyCode::Char('q') => { self.quit = true; return; }
             KeyCode::Char('v') => { self.raw = !self.raw; return; }
             KeyCode::Char('[') => { self.cycle_job(-1); return; }

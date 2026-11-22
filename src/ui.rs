@@ -230,11 +230,41 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
     if app.show_job_out && app.cur.is_some() {
         draw_output(f, cols[1], app, t, app.focus_out);
     } else if let Some(g) = app.selected_game() {
-        let mut lines = vec![Line::from(vec![Span::styled(g.name.clone(), Style::new().fg(t.accent).bold())]), Line::raw("")];
+        let mut lines = vec![];
+        lines.push(Line::from(vec![Span::styled(g.name.clone(), Style::new().fg(t.accent).bold()), Span::styled(format!("  {}", g.id), Style::new().fg(t.dim))]));
+        lines.push(Line::raw(""));
+        // Resumen organizado
+        let raw = &g.raw;
+        let kv = |key: &str, val: String| Line::from(vec![Span::styled(format!("{:<20}", key), Style::new().fg(t.accent2).bold()), Span::styled(val, Style::new().fg(t.fg))]);
+        if let Some(v) = raw.get("is_installed").and_then(|x| x.as_bool()) {
+            lines.push(kv("Instalado", if v { "● sí" } else { "○ no" }.to_string()));
+        }
+        if let Some(v) = raw.get("platform").and_then(|x| x.as_str()) {
+            lines.push(kv("Plataforma", v.to_string()));
+        }
+        if let Some(v) = raw.get("playtime_forever_minutes").and_then(|x| x.as_u64()) {
+            lines.push(kv("Tiempo de juego", format!("{} min", v)));
+        }
+        if let Some(v) = raw.get("update_available").and_then(|x| x.as_bool()) {
+            lines.push(kv("Actualización", if v { "disponible" } else { "al día" }.to_string()));
+        }
+        if let Some(v) = raw.get("install_path").and_then(|x| x.as_str()) {
+            if !v.is_empty() {
+                lines.push(kv("Ruta", v.to_string()));
+            }
+        }
+        if let Some(v) = raw.get("active_branch").and_then(|x| x.as_str()) {
+            lines.push(kv("Rama", v.to_string()));
+        }
+        lines.push(Line::raw(""));
+        lines.push(Line::styled("── completo ──", Style::new().fg(t.dim)));
         lines.extend(kv_lines(&g.raw, t));
         lines.push(Line::raw(""));
-        lines.push(Line::styled("Enter: acciones · p jugar · o opciones · I instalar · u actualizar · n info", Style::new().fg(t.dim)));
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(blk("DETALLE", t, app.focus_out)), cols[1]);
+        lines.push(Line::styled("Enter: acciones · p jugar · o opciones · I instalar · u actualizar · K info", Style::new().fg(t.dim)));
+        let h = cols[1].height.saturating_sub(2);
+        let max = lines.len().saturating_sub(h as usize) as u16;
+        app.scroll = app.scroll.min(max);
+        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((app.scroll, 0)).block(blk("DETALLE", t, app.focus_out)), cols[1]);
     } else {
         f.render_widget(blk("DETALLE", t, false), cols[1]);
     }
