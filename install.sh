@@ -23,39 +23,26 @@ esac
 
 info "Plataforma detectada: Linux"
 
-# ---------- sudo password ----------
+# ---------- sudo ----------
 SUDO=""
 if [[ "$PLATFORM" == "linux" ]]; then
     if [[ $EUID -ne 0 ]]; then
-        ask "Se necesita sudo para instalar dependencias. Contraseña:"
-        # Leer desde /dev/tty para que funcione con curl | bash
-        # Leer contraseña: desde terminal si es posible
-        # Leer contraseña: desde terminal, /dev/tty, o variable de entorno
-        if [[ -n "${SUDO_PASS:-}" ]]; then
-            info "Usando contraseña de variable SUDO_PASS"
-        elif [[ -t 0 ]]; then
-            read -rs SUDO_PASS
-        elif [[ -c /dev/tty ]]; then
-            read -rs SUDO_PASS < /dev/tty
-        else
-            error "No se puede leer la contraseña. Ejecuta: SUDO_PASS=tu_contraseña bash install.sh"
+        if ! command -v sudo >/dev/null 2>&1; then
+            error "sudo no esta instalado. Instalalo primero."
         fi
-        echo ""
-        if [[ -z "$SUDO_PASS" ]]; then
-            error "No se ingresó contraseña"
+        info "Se necesita sudo. Ingresa tu contraseña cuando se solicite:"
+        if ! sudo -v; then
+            error "No se pudo validar sudo. Verifica tu contraseña."
         fi
-        if ! echo "$SUDO_PASS" | sudo -S true 2>/dev/null; then
-            error "Contraseña incorrecta"
-        fi
-        SUDO="echo $SUDO_PASS | sudo -S"
+        SUDO="sudo"
     fi
 fi
 
 run_sudo() {
     if [[ -n "$SUDO" ]]; then
-        eval "$SUDO $*"
-    else
         sudo "$@"
+    else
+        "$@"
     fi
 }
 
