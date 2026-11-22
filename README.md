@@ -21,12 +21,6 @@ El script pide la contraseña de sudo (en Linux) e instala todo automáticamente
 curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 ```
 
-### macOS
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
-```
-
 ### Windows (PowerShell como Administrador)
 
 ```powershell
