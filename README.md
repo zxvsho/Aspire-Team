@@ -4,7 +4,7 @@ TUI retro (ratatui) para [Aurelia](https://github.com/Drackrath/Aurelia): biblio
 
 Backend: Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team llama a `aurelia --json <comando>` como subproceso y muestra el resultado.
 
-![Uploading image.png…]()
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/c56170b1-48d5-4483-a7b5-5fc98fa2b1b4" />
 
 
 ## Requisitos
