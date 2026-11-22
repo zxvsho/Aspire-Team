@@ -223,6 +223,7 @@ impl App {
         } else {
             let title = format!("aurelia {}", args.join(" "));
             self.start_job(title, args, Tag::Normal);
+            self.focus_out = true;
         }
     }
 

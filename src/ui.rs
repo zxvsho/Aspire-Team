@@ -255,6 +255,9 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
         if let Some(v) = raw.get("active_branch").and_then(|x| x.as_str()) {
             lines.push(kv("Rama", v.to_string()));
         }
+        if let Some(v) = raw.get("assets").and_then(|x| x.get("capsule")).and_then(|x| x.as_str()) {
+            lines.push(kv("Portada", v.to_string()));
+        }
         lines.push(Line::raw(""));
         lines.push(Line::styled("── completo ──", Style::new().fg(t.dim)));
         lines.extend(kv_lines(&g.raw, t));

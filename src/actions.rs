@@ -92,6 +92,7 @@ pub const GAME_ACTS: &[Act] = &[
 const INSTALLS: &[Act] = &[
     a("Cola de instalaciones", "install list", "Instalaciones en curso y pendientes"),
     q("Instalar por AppID", "install {}", "AppID", "Descarga e instala"),
+    q("Instalar en biblioteca", "install {1} --library {2..}", "AppID carpeta-biblioteca", "Instala en una biblioteca concreta (ej: /home/user/SteamLibrary)"),
     q("Pausar", "install pause {}", "AppID", "Pausa y conserva archivos parciales"),
     q("Reanudar", "install resume {}", "AppID", "Reanuda una instalación"),
     a("Reanudar todas", "install resume --all", "Una por una"),
