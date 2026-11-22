@@ -762,7 +762,12 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 }
             }
             KeyCode::Char('h') | KeyCode::Left => self.focus_out = false,
-            KeyCode::Char('l') | KeyCode::Right => self.focus_out = true,
+            KeyCode::Char('l') | KeyCode::Right => {
+                if !self.focus_out {
+                    self.activate();
+                }
+                self.focus_out = true;
+            }
             KeyCode::Char('v') => self.raw = !self.raw,
             KeyCode::Char('n') => self.search_next(1),
             KeyCode::Char('N') => self.search_next(-1),
