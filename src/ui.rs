@@ -45,14 +45,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
     f.render_widget(Block::new().style(Style::new().bg(t.bg).fg(t.fg)), area);
     let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(5), Constraint::Length(2)]).split(area);
-    // Combined header + tabs in one row
-    let header_tabs = Layout::horizontal([Constraint::Length(16), Constraint::Min(30), Constraint::Length(20)]).split(rows[0]);
-    // Left: ASPIRE-TEAM title
-    f.render_widget(Paragraph::new(Span::styled("ASPIRE-TEAM", Style::new().fg(t.accent).bold())).block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg))), header_tabs[0]);
-    // Middle: tabs
-    tabs(f, header_tabs[1], app, &t);
-    // Right: theme name
-    f.render_widget(Paragraph::new(Span::styled(format!("tema: {}", t.name), Style::new().fg(t.accent2))).alignment(Alignment::Right).block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg))), header_tabs[2]);
+    // Tabs only in the top row
+    tabs(f, rows[0], app, &t);
     let main = if app.show_jobs {
         let v = Layout::vertical([Constraint::Percentage(62), Constraint::Percentage(38)]).split(rows[1]);
         jobs_panel(f, v[1], app, &t);
@@ -352,11 +346,16 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     }
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
-        1 => "j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
+        1 => "Tab/Shift-Tab mover  j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
         0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  q salir",
-        _ => "j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
+        _ => "Tab/Shift-Tab mover  j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
     };
-    f.render_widget(Paragraph::new(Span::styled(hints, Style::new().fg(t.dim))), rows[1]);
+    let bottom = Line::from(vec![
+        Span::styled("ASPIRE-TEAM", Style::new().fg(t.dim)),
+        Span::styled(format!("  ·  {}", t.name), Style::new().fg(t.dim)),
+        Span::styled(format!("   {}", hints), Style::new().fg(t.dim)),
+    ]);
+    f.render_widget(Paragraph::new(bottom).style(Style::new().bg(t.bg)), rows[1]);
 }
 
 fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
