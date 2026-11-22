@@ -158,7 +158,8 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     ]));
     lines.push(Line::raw(""));
     for (k, d) in [
-        ("j k", "navegar barra lateral"),
+        ("Tab", "cambiar de sección"),
+        ("j k", "navegar barra lateral · contenido: mover"),
         ("Enter", "seleccionar sección"),
         ("l", "entrar al contenido"),
         ("h", "volver a la barra lateral"),
