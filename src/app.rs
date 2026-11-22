@@ -721,8 +721,8 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             _ => {}
         }
 
-        // ---- barra lateral enfocada (hjkl para moverse) ----
-        if !self.focus_out {
+        // ---- barra de pestañas (solo en Inicio) ----
+        if !self.focus_out && self.screen == 0 {
             match k.code {
                 KeyCode::Char('j') | KeyCode::Down => self.sidebar_cursor = (self.sidebar_cursor + 1) % 8,
                 KeyCode::Char('k') | KeyCode::Up => self.sidebar_cursor = (self.sidebar_cursor + 7) % 8,
