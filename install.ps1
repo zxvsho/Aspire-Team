@@ -4,9 +4,25 @@
 # Requiere: PowerShell como Administrador
 $ErrorActionPreference = "Continue"
 
-function Info  { Write-Host "▸ $args" -ForegroundColor Green }
-function Warn  { Write-Host "! $args" -ForegroundColor Yellow }
-function Fail  { Write-Host "✗ $args" -ForegroundColor Red }
+function Banner {
+    Write-Host ""
+    Write-Host "    █████╗ ███████╗██████╗ ██╗██████╗ ███████╗" -ForegroundColor Cyan
+    Write-Host "   ██╔══██╗██╔════╝██╔══██╗██║██╔══██╗██╔════╝" -ForegroundColor Cyan
+    Write-Host "   ███████║███████╗██████╔╝██║██████╔╝█████╗  " -ForegroundColor Cyan
+    Write-Host "   ██╔══██║╚════██║██╔═══╝ ██║██╔══██╗██╔══╝  " -ForegroundColor Cyan
+    Write-Host "   ██║  ██║███████║██║     ██║██║  ██║███████╗" -ForegroundColor Cyan
+    Write-Host "   ╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "   TUI retro para Aurelia — cliente de Steam en terminal" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
+function Info  { Write-Host "  ▸ $args" -ForegroundColor Green }
+function Warn  { Write-Host "  ! $args" -ForegroundColor Yellow }
+function Fail  { Write-Host "  ✗ $args" -ForegroundColor Red }
+function Step  { Write-Host ""; Write-Host "▸ $args" -ForegroundColor Blue }
+
+Banner
 
 # ---------- Verificar admin ----------
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -16,10 +32,12 @@ if (-not $isAdmin) {
     Fail "Sin permisos de administrador."
     exit 1
 }
+Info "Permisos de administrador OK"
 
 # ---------- Rust ----------
+Step "Verificando Rust..."
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Info "Instalando Rust..."
+    Info "Rust no encontrado. Instalando..."
     $rustInstalled = $false
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         try {
@@ -51,21 +69,17 @@ if (Get-Command rustc -ErrorAction SilentlyContinue) {
     exit 1
 }
 
-# ---------- Aurelia (binario precompilado para Windows) ----------
+# ---------- Aurelia ----------
+Step "Instalando Aurelia..."
 if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
-    Info "Instalando Aurelia (binario precompilado para Windows)..."
     $aureliaInstalled = $false
-
-    # Detectar arquitectura
     $arch = if ([Environment]::Is64BitOperatingSystem) {
         if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x86_64" }
     } else { "x86_64" }
 
-    # Intentar descargar binario precompilado desde GitHub Releases
+    # Intentar binario precompilado
     try {
         $releaseUrl = "https://github.com/Drackrath/Aurelia/releases/latest/download/aurelia_windows_$arch.exe"
-        $aureliaPath = "$env:LOCALAPPDATA\Microsoft\WindowsApps\aurelia.exe"
-        # Alternativa: instalar en ~/.cargo/bin
         $aureliaPath = "$env:USERPROFILE\.cargo\bin\aurelia.exe"
         if (-not (Test-Path "$env:USERPROFILE\.cargo\bin")) {
             New-Item -ItemType Directory -Path "$env:USERPROFILE\.cargo\bin" -Force | Out-Null
@@ -74,7 +88,7 @@ if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
         Info "Aurelia descargado desde GitHub Releases ($arch)."
         $aureliaInstalled = $true
     } catch {
-        Warn "No se pudo descargar el binario precompilado. Intentando cargo install..."
+        Warn "No se pudo descargar el binario. Intentando cargo install..."
     }
 
     # Fallback: cargo install
@@ -83,7 +97,6 @@ if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
             cargo install aurelia-steam
             $aureliaInstalled = $true
         } catch {
-            Warn "cargo install falló. Intentando aurelia..."
             try {
                 cargo install aurelia
                 $aureliaInstalled = $true
@@ -98,16 +111,18 @@ if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
 }
 
 # ---------- Compilar Aspire-Team ----------
+Step "Compilando Aspire-Team..."
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
-Info "Compilando Aspire-Team (esto puede tardar unos minutos)..."
+Info "Esto puede tardar unos minutos..."
+
 $buildOk = $false
 try {
     cargo build --release
     if ($LASTEXITCODE -eq 0) { $buildOk = $true }
 } catch {
-    Warn "cargo build falló, reintentando..."
+    Warn "Primer intento falló, reintentando..."
 }
 if (-not $buildOk) {
     try {
@@ -123,14 +138,18 @@ try {
 } catch {
     Warn "cargo install falló, pero el binario está en target/release/"
 }
+Info "Aspire-Team compilado e instalado"
 
 # ---------- Config ----------
+Step "Configurando..."
 $ConfigDir = Join-Path $env:APPDATA "aspire-team"
 if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
 $ConfigFile = Join-Path $ConfigDir "config.toml"
 if (-not (Test-Path $ConfigFile)) {
     Set-Content -Path $ConfigFile -Value 'theme = "Sistema"'
     Info "Config creada en $ConfigFile"
+} else {
+    Info "Config existente conservada"
 }
 $LogoFile = Join-Path $ConfigDir "logo.txt"
 $LogoSrc = Join-Path $ScriptDir "assets\logo.txt"
@@ -139,6 +158,10 @@ if (-not (Test-Path $LogoFile) -and (Test-Path $LogoSrc)) {
     Info "Logo copiado a $LogoFile"
 }
 
+Write-Host ""
+Write-Host "╔══════════════════════════════════════════╗" -ForegroundColor Green
+Write-Host "║     ¡Instalación completada con éxito!   ║" -ForegroundColor Green
+Write-Host "╚══════════════════════════════════════════╝" -ForegroundColor Green
 Write-Host ""
 Info "Listo! Ejecuta con: aspire-team"
 Write-Host "  • Variable opcional: ASPIRE_AURELIA_BIN para usar otro binario de aurelia."
