@@ -34,6 +34,7 @@ pub enum Tag {
     Normal,
     LibAll,
     LibInst,
+    Protons,
 }
 
 pub struct Job {
@@ -108,6 +109,7 @@ pub struct App {
     pub pending: Option<Vec<String>>,
     pub logo: Vec<String>,
     pub aurelia_ok: bool,
+    pub proton_versions: Vec<String>,
     pub count: Option<usize>,
     pub g_pending: bool,
     pub last_search: String,
@@ -150,12 +152,14 @@ impl App {
             pending: None,
             logo: logo_txt.lines().map(|s| s.to_string()).collect(),
             aurelia_ok: true,
+            proton_versions: vec![],
             count: None,
             g_pending: false,
             last_search: String::new(),
             search_dir: 1,
         };
         app.reload_library();
+        app.reload_protons();
         app
     }
 
@@ -195,6 +199,10 @@ impl App {
 
     pub fn reload_installed(&mut self) {
         self.start_job("list --installed".into(), vec!["list".into(), "--installed".into()], Tag::LibInst);
+    }
+
+    pub fn reload_protons(&mut self) {
+        self.start_job("config protons".into(), vec!["config".into(), "protons".into()], Tag::Protons);
     }
 
     // ---------- trabajos ----------
@@ -280,6 +288,28 @@ impl App {
                                 }
                             }
                         }
+                        Tag::Protons => {
+                            if let Some(v) = &self.jobs[job].result {
+                                let mut versions = vec![];
+                                if let Some(custom) = v.get("custom").and_then(|x| x.as_array()) {
+                                    for c in custom {
+                                        if let Some(s) = c.as_str() {
+                                            versions.push(s.to_string());
+                                        }
+                                    }
+                                }
+                                if let Some(steam) = v.get("steam").and_then(|x| x.as_array()) {
+                                    for s in steam {
+                                        if let Some(s) = s.as_str() {
+                                            versions.push(s.to_string());
+                                        }
+                                    }
+                                }
+                                if !versions.is_empty() {
+                                    self.proton_versions = versions;
+                                }
+                            }
+                        }
                         Tag::Normal => {
                             let ok = code == Some(0);
                             self.msg = format!("{} {}", if ok { "✔" } else { "✘" }, self.jobs[job].title);
@@ -319,7 +349,7 @@ impl App {
         }
         if act.mode == Mode::Launch {
             if let Some(g) = self.selected_game() {
-                self.overlay = Overlay::Launch(Launch::new(g.id.clone(), g.name.clone()));
+                self.overlay = Overlay::Launch(Launch::new(g.id.clone(), g.name.clone(), &self.proton_versions));
             }
             return;
         }

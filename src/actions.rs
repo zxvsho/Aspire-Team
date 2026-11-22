@@ -267,7 +267,7 @@ pub fn build_args(tpl: &str, app: Option<&str>, input: &str) -> Vec<String> {
 
 pub struct LRow {
     pub label: &'static str,
-    pub opts: &'static [&'static str],
+    pub opts: Vec<String>,
     pub idx: usize,
     pub text: String,
     pub hint: &'static str,
@@ -281,25 +281,27 @@ pub struct Launch {
     pub editing: bool,
 }
 
-fn lr(label: &'static str, opts: &'static [&'static str], hint: &'static str) -> LRow {
+fn lr(label: &'static str, opts: Vec<String>, hint: &'static str) -> LRow {
     LRow { label, opts, idx: 0, text: String::new(), hint }
 }
 
 impl Launch {
-    pub fn new(app: String, name: String) -> Self {
+    pub fn new(app: String, name: String, proton_versions: &[String]) -> Self {
+        let mut proton_opts = vec!["(ninguno)".to_string()];
+        proton_opts.extend(proton_versions.iter().cloned());
         let rows = vec![
-            lr("Plataforma", &["auto", "linux", "windows"], "--platform: build nativa o Windows vía Proton"),
-            lr("Proton / Wine", &[], "--proton <nombre>  (ver Complementos → Proton)"),
-            lr("Modo Steam", &["auto", "none", "host", "runtime"], "--steam-mode: runtime=Wine, host=Steam instalado"),
-            lr("Steam online", &["no", "sí"], "--steam: Family Sharing / DRM"),
-            lr("umu-launcher", &["no", "sí"], "--umu: Proton vía umu-run"),
-            lr("Motor nativo", &["no", "sí"], "--native-engine: luxtorpeda"),
-            lr("Shaders Vulkan", &["auto", "omitir"], "--skip-shaders"),
-            lr("Script de envoltura", &["auto", "ninguno"], "--no-script"),
-            lr("ID launch-option", &[], "--launch-option <id>  (ver opciones de lanzamiento)"),
-            lr("Script propio", &[], "--script <ruta>"),
-            lr("Detalle de logs", &["normal", "-v", "-vv"], "Progreso y depuración"),
-            lr("Parámetros Steam", &[], "Solo para guardar con `s`: gamemoderun %command% -novid"),
+            lr("Plataforma", vec!["auto".into(), "linux".into(), "windows".into()], "--platform: build nativa o Windows vía Proton"),
+            lr("Proton / Wine", proton_opts, "--proton <nombre>  (ver Complementos → Proton: listar)"),
+            lr("Modo Steam", vec!["auto".into(), "none".into(), "host".into(), "runtime".into()], "--steam-mode: runtime=Wine, host=Steam instalado"),
+            lr("Steam online", vec!["no".into(), "sí".into()], "--steam: Family Sharing / DRM"),
+            lr("umu-launcher", vec!["no".into(), "sí".into()], "--umu: Proton vía umu-run"),
+            lr("Motor nativo", vec!["no".into(), "sí".into()], "--native-engine: luxtorpeda"),
+            lr("Shaders Vulkan", vec!["auto".into(), "omitir".into()], "--skip-shaders"),
+            lr("Script de envoltura", vec!["auto".into(), "ninguno".into()], "--no-script"),
+            lr("ID launch-option", vec![], "--launch-option <id>  (ver opciones de lanzamiento)"),
+            lr("Script propio", vec![], "--script <ruta>"),
+            lr("Detalle de logs", vec!["normal".into(), "-v".into(), "-vv".into()], "Progreso y depuración"),
+            lr("Parámetros Steam", vec![], "Solo para guardar con `s`: gamemoderun %command% -novid"),
         ];
         Launch { app, name, rows, cursor: 0, editing: false }
     }
@@ -318,7 +320,7 @@ impl Launch {
             }
         };
         if self.value(0) != "auto" { flag("--platform", Some(self.value(0))) }
-        if !self.value(1).is_empty() { flag("--proton", Some(self.value(1))) }
+        if self.value(1) != "(ninguno)" && !self.value(1).is_empty() { flag("--proton", Some(self.value(1))) }
         if self.value(2) != "auto" { flag("--steam-mode", Some(self.value(2))) }
         if self.value(3) == "sí" { flag("--steam", None) }
         if self.value(4) == "sí" { flag("--umu", None) }
@@ -338,7 +340,7 @@ impl Launch {
     /// `config game <app> [--proton P] [--launch-options L]`
     pub fn save_args(&self) -> Option<Vec<String>> {
         let mut a: Vec<String> = vec!["config".into(), "game".into(), self.app.clone()];
-        if !self.value(1).is_empty() {
+        if !self.value(1).is_empty() && self.value(1) != "(ninguno)" {
             a.push("--proton".into());
             a.push(self.value(1));
         }

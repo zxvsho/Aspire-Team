@@ -44,35 +44,29 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     };
     let area = f.area();
     f.render_widget(Block::new().style(Style::new().bg(t.bg).fg(t.fg)), area);
-    let rows = Layout::vertical([Constraint::Length(3), Constraint::Length(3), Constraint::Min(5), Constraint::Length(2)]).split(area);
-    header(f, rows[0], app, &t);
-    tabs(f, rows[1], app, &t);
+    let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(5), Constraint::Length(2)]).split(area);
+    // Combined header + tabs in one row
+    let header_tabs = Layout::horizontal([Constraint::Length(16), Constraint::Min(30), Constraint::Length(20)]).split(rows[0]);
+    // Left: ASPIRE-TEAM title
+    f.render_widget(Paragraph::new(Span::styled("ASPIRE-TEAM", Style::new().fg(t.accent).bold())).block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg))), header_tabs[0]);
+    // Middle: tabs
+    tabs(f, header_tabs[1], app, &t);
+    // Right: theme name
+    f.render_widget(Paragraph::new(Span::styled(format!("tema: {}", t.name), Style::new().fg(t.accent2))).alignment(Alignment::Right).block(Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg))), header_tabs[2]);
     let main = if app.show_jobs {
-        let v = Layout::vertical([Constraint::Percentage(62), Constraint::Percentage(38)]).split(rows[2]);
+        let v = Layout::vertical([Constraint::Percentage(62), Constraint::Percentage(38)]).split(rows[1]);
         jobs_panel(f, v[1], app, &t);
         v[0]
     } else {
-        rows[2]
+        rows[1]
     };
     match app.screen {
         0 => home(f, main, app, &t),
         1 => library(f, main, app, &t),
         _ => menu_screen(f, main, app, &t),
     }
-    footer(f, rows[3], app, &t);
-    overlays(f, rows[2], app, &t);
-}
-
-fn header(f: &mut Frame, a: Rect, _app: &App, t: &Theme) {
-    let b = Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg).fg(t.fg));
-    let inner = b.inner(a);
-    f.render_widget(b, a);
-    let left = Line::from(vec![
-        Span::styled("ASPIRE-TEAM", Style::new().fg(t.accent).bold()),
-    ]);
-    f.render_widget(Paragraph::new(left), inner);
-    let right = Line::from(vec![Span::styled(format!("tema: {}  ", t.name), Style::new().fg(t.accent2))]);
-    f.render_widget(Paragraph::new(right).alignment(Alignment::Right), inner);
+    footer(f, rows[2], app, &t);
+    overlays(f, rows[1], app, &t);
 }
 
 fn tabs(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
