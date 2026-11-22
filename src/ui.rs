@@ -63,18 +63,15 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     overlays(f, rows[2], app, &t);
 }
 
-fn header(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
+fn header(f: &mut Frame, a: Rect, _app: &App, t: &Theme) {
     let b = Block::bordered().border_type(BorderType::Double).border_style(Style::new().fg(t.accent)).style(Style::new().bg(t.bg).fg(t.fg));
     let inner = b.inner(a);
     f.render_widget(b, a);
     let left = Line::from(vec![
-        Span::styled(" ▐█▌ ", Style::new().fg(t.accent)),
         Span::styled("ASPIRE-TEAM", Style::new().fg(t.accent).bold()),
-        Span::styled("  ·  frontend para Aurelia", Style::new().fg(t.dim)),
     ]);
     f.render_widget(Paragraph::new(left), inner);
-    let (txt, c) = if app.aurelia_ok { ("● aurelia", t.ok) } else { ("○ aurelia no encontrado", t.err) };
-    let right = Line::from(vec![Span::styled(format!("tema: {}  ", t.name), Style::new().fg(t.accent2)), Span::styled(txt, Style::new().fg(c)), Span::raw(" ")]);
+    let right = Line::from(vec![Span::styled(format!("tema: {}  ", t.name), Style::new().fg(t.accent2))]);
     f.render_widget(Paragraph::new(right).alignment(Alignment::Right), inner);
 }
 
@@ -273,7 +270,7 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
 }
 
 fn menu_screen(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
-    let cols = Layout::horizontal([Constraint::Length(42), Constraint::Min(20)]).split(a);
+    let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Min(20)]).split(a);
     let acts = acts_for(app.screen);
     let items: Vec<ListItem> = acts
         .iter()

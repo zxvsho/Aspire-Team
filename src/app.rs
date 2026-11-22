@@ -14,12 +14,12 @@ use std::{
 pub const SCREENS: [(&str, &str); 8] = [
     ("◆", "Inicio"),
     ("▣", "Biblioteca"),
-    ("⇩", "Instalaciones"),
-    ("✦", "Tienda"),
-    ("⚙", "Mods y parches"),
-    ("⧉", "Complementos"),
-    ("☺", "Social"),
-    ("≡", "Sistema"),
+    ("⤓", "Instalaciones"),
+    ("★", "Tienda"),
+    ("⚒", "Mods y parches"),
+    ("⊕", "Complementos"),
+    ("☻", "Social"),
+    ("⚙", "Sistema"),
 ];
 
 pub const LOGO: &str = r#" █████╗ ███████╗██████╗ ██╗██████╗ ███████╗
@@ -610,7 +610,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
     fn goto(&mut self, s: usize) {
         self.screen = s.min(7);
         self.sidebar_cursor = self.screen;
-        self.focus_out = false;
+        self.focus_out = s >= 2; // auto-focus content on menu screens
         self.scroll = 0;
         self.list_state = ListState::default();
     }
