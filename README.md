@@ -12,32 +12,24 @@ Backend: Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team 
 
 ## Instalación rápida (un comando)
 
-### Linux (Arch / CachyOS / Artix)
+El script pide la contraseña de sudo (en Linux/macOS) e instala todo automáticamente: Rust, Aurelia y Aspire-Team.
+
+### Linux (Arch / CachyOS / Artix / Debian / Fedora)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 ```
 
-O clonando el repo:
+### macOS
 
 ```bash
-git clone https://github.com/zxvsho/Aspire-Team.git
-cd Aspire-Team
-chmod +x install.sh && ./install.sh
+curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 ```
 
-### Windows (PowerShell)
+### Windows (PowerShell como Administrador)
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
-```
-
-O clonando el repo:
-
-```powershell
-git clone https://github.com/zxvsho/Aspire-Team.git
-cd Aspire-Team
-.\install.ps1
 ```
 
 ### macOS
@@ -48,7 +40,14 @@ curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh 
 
 El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Team.
 
-## Instalación manual
+### Clonando el repo
+
+```bash
+git clone https://github.com/zxvsho/Aspire-Team.git
+cd Aspire-Team
+chmod +x install.sh && ./install.sh   # Linux / macOS
+# o en Windows: .\install.ps1
+```
 
 ```bash
 # 1. Instalar Rust
@@ -150,6 +149,24 @@ Aurelia gestiona juegos de Steam de la cuenta con sesión iniciada. Si ya tienes
 
 Códigos de salida propios: 80-84 (login QR), 85 `disk_full`, 86 `offline`, 87 `steam_config_mismatch`.
 
-## Licencia
+## Plugins y complementos
 
-GPL-3.0-or-later
+Aspire-Team expone todo lo que ofrece Aurelia para instalar y gestionar complementos:
+
+| Plugin | Comandos en Aspire-Team |
+|---|---|
+| **Proton** (GE, CachyOS, etc.) | Complementos → Proton: listar / instalar / predeterminado / desinstalar |
+| **umu-launcher** | Complementos → umu: estado / activar / instalar / desinstalar |
+| **luxtorpeda** (motor nativo) | Complementos → luxtorpeda: estado / activar / instalar / desinstalar |
+| **Steam Runtime** (Wine) | Complementos → Steam runtime: instalar / iniciar sesión / reparar |
+| **Scripts de lanzamiento** | Mods y parches → Scripts: crear / ver / eliminar |
+| **Parámetros de lanzamiento** | Biblioteca → `o` (opciones) o `config game --launch-options` |
+| **Parches y mods locales** | Biblioteca → Enter → "Aplicar parche/mod local" (copia carpeta con respaldo) |
+| **Workshop** | Mods y parches → Workshop: explorar / instalar / suscribirse |
+| **Depots / versiones** | Mods y parches → Depots, Ramas, Degradar, Fijar versión |
+
+Funciona igual en **Windows** y **Linux** (macOS con limitaciones de Aurelia).
+
+- **Aurelia** — https://github.com/Drackrath/Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team es un frontend que llama a `aurelia --json`.
+- **ratatui** — https://github.com/ratatui/ratatui (framework TUI en Rust).
+- **LazyVim** — inspiración para la barra lateral, línea de estado y tecla líder.
