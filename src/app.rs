@@ -393,19 +393,20 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 self.overlay = Overlay::None;
                 return;
             }
-            // Sidebar: column < 22, rows 4..12 → screens 0..7
-            if m.column < 22 {
-                let row = m.row as usize;
-                if (4..12).contains(&row) {
-                    self.goto(row - 4);
+            // Tab bar (row 3): switch section by column
+            if m.row == 3 {
+                let tab_width = _w / 8;
+                if tab_width > 0 {
+                    let idx = (m.column / tab_width).min(7) as usize;
+                    self.goto(idx);
                 }
                 return;
             }
             // Library (screen 1): main content area
             if self.screen == 1 {
                 let row = m.row as usize;
-                if row >= 4 && row < h as usize - 2 {
-                    let idx = row - 4;
+                if row >= 7 && row < h as usize - 2 {
+                    let idx = row - 7;
                     let filtered = self.filtered();
                     if idx < filtered.len() {
                         self.cursor[1] = idx;
@@ -416,8 +417,8 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             // Action lists (screens 2-7): select by row
             if self.screen >= 2 {
                 let row = m.row as usize;
-                if row >= 4 && row < h as usize - 2 {
-                    let idx = row - 4;
+                if row >= 7 && row < h as usize - 2 {
+                    let idx = row - 7;
                     let acts = acts_for(self.screen);
                     if idx < acts.len() {
                         self.cursor[self.screen] = idx;

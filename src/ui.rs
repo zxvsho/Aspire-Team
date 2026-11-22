@@ -44,24 +44,23 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     };
     let area = f.area();
     f.render_widget(Block::new().style(Style::new().bg(t.bg).fg(t.fg)), area);
-    let rows = Layout::vertical([Constraint::Length(3), Constraint::Min(5), Constraint::Length(2)]).split(area);
+    let rows = Layout::vertical([Constraint::Length(3), Constraint::Length(3), Constraint::Min(5), Constraint::Length(2)]).split(area);
     header(f, rows[0], app, &t);
-    let cols = Layout::horizontal([Constraint::Length(22), Constraint::Min(30)]).split(rows[1]);
-    sidebar(f, cols[0], app, &t);
+    tabs(f, rows[1], app, &t);
     let main = if app.show_jobs {
-        let v = Layout::vertical([Constraint::Percentage(62), Constraint::Percentage(38)]).split(cols[1]);
+        let v = Layout::vertical([Constraint::Percentage(62), Constraint::Percentage(38)]).split(rows[2]);
         jobs_panel(f, v[1], app, &t);
         v[0]
     } else {
-        cols[1]
+        rows[2]
     };
     match app.screen {
         0 => home(f, main, app, &t),
         1 => library(f, main, app, &t),
         _ => menu_screen(f, main, app, &t),
     }
-    footer(f, rows[2], app, &t);
-    overlays(f, rows[1], app, &t);
+    footer(f, rows[3], app, &t);
+    overlays(f, rows[2], app, &t);
 }
 
 fn header(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
@@ -79,21 +78,24 @@ fn header(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     f.render_widget(Paragraph::new(right).alignment(Alignment::Right), inner);
 }
 
-fn sidebar(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
-    let items: Vec<ListItem> = SCREENS
-        .iter()
-        .enumerate()
-        .map(|(i, (ic, name))| {
-            let sel = i == app.sidebar_cursor;
-            let line = Line::from(vec![
-                Span::styled(if sel { "▍" } else { " " }, Style::new().fg(t.accent)),
-                Span::styled(format!("{} ", i + 1), Style::new().fg(t.dim)),
-                Span::raw(format!("{ic} {name}")),
-            ]);
-            ListItem::new(line).style(if sel { sel_style(t) } else { Style::new().fg(t.fg) })
-        })
-        .collect();
-    f.render_widget(List::new(items).block(blk("MENÚ", t, !app.focus_out)), a);
+fn tabs(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
+    let mut spans = vec![Span::raw(" ")];
+    for (i, (ic, name)) in SCREENS.iter().enumerate() {
+        let sel = i == app.sidebar_cursor;
+        let active = i == app.screen;
+        let style = if sel {
+            Style::new().bg(t.accent).fg(Color::Black).bold()
+        } else if active {
+            Style::new().fg(t.accent).bold()
+        } else {
+            Style::new().fg(t.dim)
+        };
+        spans.push(Span::styled(format!(" {} {} ", ic, name), style));
+        if i < SCREENS.len() - 1 {
+            spans.push(Span::styled("│", Style::new().fg(t.dim)));
+        }
+    }
+    f.render_widget(Paragraph::new(Line::from(spans)).alignment(Alignment::Center).block(blk("MENÚ", t, !app.focus_out)), a);
 }
 
 fn kv_lines(v: &Value, t: &Theme) -> Vec<Line<'static>> {
