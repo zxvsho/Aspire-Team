@@ -21,15 +21,7 @@ El script pide la contraseña de sudo (en Linux) e instala todo automáticamente
 curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 ```
 
-### Windows (PowerShell como Administrador)
-
-```powershell
-iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
-```
-
-Requiere PowerShell ejecutado como Administrador. El script instala Rust, Aurelia y compila Aspire-Team.
-
-El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Team.
+El script pide la contraseña de sudo e instala todo automáticamente: dependencias del sistema, Rust, Aurelia y Aspire-Team. Funciona en cualquier distro Linux.
 
 ### Clonando el repo
 
@@ -37,7 +29,6 @@ El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Tea
 git clone https://github.com/zxvsho/Aspire-Team.git
 cd Aspire-Team
 chmod +x install.sh && ./install.sh   # Linux
-# o en Windows: .\install.ps1
 ```
 
 ```bash
@@ -156,7 +147,7 @@ Aspire-Team expone todo lo que ofrece Aurelia para instalar y gestionar compleme
 | **Workshop** | Mods y parches → Workshop: explorar / instalar / suscribirse |
 | **Depots / versiones** | Mods y parches → Depots, Ramas, Degradar, Fijar versión |
 
-Funciona igual en **Windows** y **Linux**.
+Funciona en Linux.
 
 - **Aurelia** — https://github.com/Drackrath/Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team es un frontend que llama a `aurelia --json`.
 - **ratatui** — https://github.com/ratatui/ratatui (framework TUI en Rust).
