@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # install.sh — Instala Aspire-Team y sus dependencias (Rust, Aurelia)
+# Funciona en cualquier distro Linux.
 # Uso: curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 #      o: ./install.sh
 set -euo pipefail
@@ -14,25 +15,21 @@ ask()   { echo -en "${BOLD}${CYAN}?${RESET} $* "; }
 OS="$(uname -s 2>/dev/null || echo Unknown)"
 case "$OS" in
     Linux*)  PLATFORM=linux ;;
-    Darwin*) PLATFORM=macos ;;
     *)       error "Sistema no soportado: $OS. En Windows usa install.ps1" ;;
 esac
 
-info "Plataforma detectada: $PLATFORM"
+info "Plataforma detectada: Linux"
 
 # ---------- sudo password ----------
 SUDO=""
-if [[ "$PLATFORM" == "linux" ]]; then
-    if [[ $EUID -ne 0 ]]; then
-        ask "Se necesita sudo para instalar dependencias. Contraseña:"
-        read -rs SUDO_PASS
-        echo ""
-        # verify
-        if ! echo "$SUDO_PASS" | sudo -S true 2>/dev/null; then
-            error "Contraseña incorrecta"
-        fi
-        SUDO="echo $SUDO_PASS | sudo -S"
+if [[ $EUID -ne 0 ]]; then
+    ask "Se necesita sudo para instalar dependencias. Contraseña:"
+    read -rs SUDO_PASS
+    echo ""
+    if ! echo "$SUDO_PASS" | sudo -S true 2>/dev/null; then
+        error "Contraseña incorrecta"
     fi
+    SUDO="echo $SUDO_PASS | sudo -S"
 fi
 
 run_sudo() {
@@ -48,56 +45,65 @@ if ! command -v cargo >/dev/null 2>&1; then
     info "Instalando Rust via rustup..."
     if command -v curl >/dev/null 2>&1; then
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://sh.rustup.rs | sh -s -- -y
     else
-        error "Se necesita curl para instalar Rust"
+        error "Se necesita curl o wget para instalar Rust"
     fi
     # shellcheck disable=SC1091
-    source "$HOME/.cargo/env"
+    source "$HOME/.cargo/env" 2>/dev/null || true
+    export PATH="$HOME/.cargo/bin:$PATH"
 fi
 info "Rust: $(rustc --version)"
 
+# ---------- Dependencias del sistema ----------
+info "Instalando dependencias del sistema..."
+if command -v apt-get >/dev/null 2>&1; then
+    run_sudo apt-get update -qq
+    run_sudo apt-get install -y -qq build-essential pkg-config libssl-dev 2>/dev/null || true
+elif command -v pacman >/dev/null 2>&1; then
+    run_sudo pacman -S --needed --noconfirm base-devel openssl 2>/dev/null || true
+elif command -v dnf >/dev/null 2>&1; then
+    run_sudo dnf install -y gcc openssl-devel 2>/dev/null || true
+elif command -v zypper >/dev/null 2>&1; then
+    run_sudo zypper install -y gcc openssl-devel 2>/dev/null || true
+elif command -v apk >/dev/null 2>&1; then
+    run_sudo apk add --no-cache build-base openssl-dev 2>/dev/null || true
+elif command -v xbps-install >/dev/null 2>&1; then
+    run_sudo xbps-install -y base-devel openssl 2>/dev/null || true
+else
+    warn "Gestor de paquetes no reconocido. Asegúrate de tener gcc y openssl instalados."
+fi
+
 # ---------- Aurelia ----------
 if ! command -v aurelia >/dev/null 2>&1; then
-    info "Instalando Aurelia desde repositorios oficiales..."
-    if [[ "$PLATFORM" == "linux" ]]; then
-        if command -v pacman >/dev/null 2>&1; then
-            info "Usando pacman (Arch)..."
-            run_sudo pacman -S --needed --noconfirm aurelia
-        elif command -v apt-get >/dev/null 2>&1; then
-            info "Usando apt (Debian/Ubuntu)..."
-            run_sudo apt-get update -qq
-            run_sudo apt-get install -y -qq aurelia
-        elif command -v dnf >/dev/null 2>&1; then
-            info "Usando dnf (Fedora)..."
-            run_sudo dnf install -y aurelia
-        else
-            warn "Gestor de paquetes no reconocido. Instalando via cargo..."
-            cargo install aurelia
+    info "Instalando Aurelia..."
+    INSTALLED=false
+    # Intentar repos oficiales según distro
+    if command -v pacman >/dev/null 2>&1; then
+        if run_sudo pacman -S --needed --noconfirm aurelia 2>/dev/null; then
+            INSTALLED=true
         fi
-    elif [[ "$PLATFORM" == "macos" ]]; then
-        if command -v brew >/dev/null 2>&1; then
-            info "Usando Homebrew..."
-            brew install aurelia
-        else
-            warn "Homebrew no encontrado. Instalando via cargo..."
-            cargo install aurelia
+    elif command -v apt-get >/dev/null 2>&1; then
+        if run_sudo apt-get install -y -qq aurelia 2>/dev/null; then
+            INSTALLED=true
         fi
+    elif command -v dnf >/dev/null 2>&1; then
+        if run_sudo dnf install -y aurelia 2>/dev/null; then
+            INSTALLED=true
+        fi
+    elif command -v zypper >/dev/null 2>&1; then
+        if run_sudo zypper install -y aurelia 2>/dev/null; then
+            INSTALLED=true
+        fi
+    fi
+    # Fallback: cargo install (funciona en cualquier distro)
+    if [[ "$INSTALLED" != "true" ]]; then
+        warn "Aurelia no está en los repos oficiales. Instalando via cargo..."
+        cargo install aurelia
     fi
 else
     info "Aurelia: $(aurelia --version 2>&1 | head -1)"
-fi
-
-# ---------- Dependencias del sistema (Linux) ----------
-if [[ "$PLATFORM" == "linux" ]]; then
-    info "Instalando dependencias del sistema..."
-    if command -v apt-get >/dev/null 2>&1; then
-        run_sudo apt-get update -qq
-        run_sudo apt-get install -y -qq build-essential pkg-config libssl-dev 2>/dev/null || true
-    elif command -v pacman >/dev/null 2>&1; then
-        run_sudo pacman -S --needed --noconfirm base-devel openssl 2>/dev/null || true
-    elif command -v dnf >/dev/null 2>&1; then
-        run_sudo dnf install -y gcc openssl-devel 2>/dev/null || true
-    fi
 fi
 
 # ---------- Compilar Aspire-Team ----------

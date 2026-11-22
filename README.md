@@ -13,9 +13,9 @@ Aurelia gestiona la sesión de Steam por su cuenta: si ya tienes Steam con sesi�
 
 ## Instalación rápida (un comando)
 
-El script pide la contraseña de sudo (en Linux) e instala todo automáticamente: Rust, Aurelia y Aspire-Team.
+El script pide la contraseña de sudo (en Linux) e instala todo automáticamente: dependencias del sistema, Rust, Aurelia y Aspire-Team. Funciona en cualquier distro Linux.
 
-### Linux (Arch / CachyOS / Artix / Debian / Fedora)
+### Linux (cualquier distro: Arch, Debian, Fedora, openSUSE, Alpine, etc.)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
@@ -26,6 +26,8 @@ curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
 ```
+
+Requiere PowerShell ejecutado como Administrador. El script instala Rust, Aurelia y compila Aspire-Team.
 
 El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Team.
 

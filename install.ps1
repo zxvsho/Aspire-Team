@@ -1,17 +1,26 @@
 # install.ps1 — Instala Aspire-Team en Windows (y sus dependencias: Rust, Aurelia)
 # Uso: iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
 #      o: .\install.ps1
+# Requiere: PowerShell como Administrador
 $ErrorActionPreference = "Stop"
 
 function Info  { Write-Host "▸ $args" -ForegroundColor Green }
 function Warn  { Write-Host "! $args" -ForegroundColor Yellow }
 function Fail  { Write-Host "✗ $args" -ForegroundColor Red; exit 1 }
 
+# ---------- Verificar admin ----------
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Warn "Se requieren permisos de Administrador."
+    Warn "Ejecuta PowerShell como Administrador y vuelve a correr el script."
+    Fail "Sin permisos de administrador."
+}
+
 # ---------- Rust ----------
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Info "Instalando Rust via rustup..."
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id Rustlang.Rustup -e --silent
+        winget install --id Rustlang.Rustup -e --silent --accept-package-agreements --accept-source-agreements
     } else {
         $rustupUrl = "https://win.rustup.rs/x86_64"
         $rustupPath = "$env:TEMP\rustup-init.exe"
@@ -19,6 +28,8 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
         & $rustupPath -y
     }
     $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+    # Refresh PATH from registry
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 Info "Rust: $(rustc --version)"
 
@@ -26,7 +37,7 @@ Info "Rust: $(rustc --version)"
 if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
     Info "Instalando Aurelia..."
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id Drackrath.Aurelia -e --silent 2>$null
+        winget install --id Drackrath.Aurelia -e --silent --accept-package-agreements --accept-source-agreements 2>$null
         if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
             cargo install aurelia
         }
@@ -40,7 +51,7 @@ if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
 # ---------- Compilar Aspire-Team ----------
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptDir
-Info "Compilando Aspire-Team..."
+Info "Compilando Aspire-Team (esto puede tardar unos minutos)..."
 cargo build --release
 cargo install --path . --force
 
@@ -52,7 +63,6 @@ if (-not (Test-Path $ConfigFile)) {
     Set-Content -Path $ConfigFile -Value 'theme = "Sistema"'
     Info "Config creada en $ConfigFile"
 }
-# Copy logo if not present
 $LogoFile = Join-Path $ConfigDir "logo.txt"
 $LogoSrc = Join-Path $ScriptDir "assets\logo.txt"
 if (-not (Test-Path $LogoFile) -and (Test-Path $LogoSrc)) {
@@ -62,4 +72,5 @@ if (-not (Test-Path $LogoFile) -and (Test-Path $LogoSrc)) {
 
 Write-Host ""
 Info "Listo! Ejecuta con: aspire-team"
-Write-Host "  Variable opcional: ASPIRE_AURELIA_BIN para usar otro binario de aurelia."
+Write-Host "  • Variable opcional: ASPIRE_AURELIA_BIN para usar otro binario de aurelia."
+Write-Host "  • Si ya tienes Steam con sesión iniciada, Aurelia la reutiliza automáticamente."
