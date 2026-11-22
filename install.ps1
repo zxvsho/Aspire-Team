@@ -45,6 +45,13 @@ if (-not (Test-Path $ConfigFile)) {
     Set-Content -Path $ConfigFile -Value 'theme = "Sistema"'
     Info "Config creada en $ConfigFile"
 }
+# Copy logo if not present
+$LogoFile = Join-Path $ConfigDir "logo.txt"
+$LogoSrc = Join-Path $ScriptDir "assets\logo.txt"
+if (-not (Test-Path $LogoFile) -and (Test-Path $LogoSrc)) {
+    Copy-Item -Path $LogoSrc -Destination $LogoFile
+    Info "Logo copiado a $LogoFile"
+}
 
 Write-Host ""
 Info "Listo! Ejecuta con: aspire-team"

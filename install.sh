@@ -62,6 +62,11 @@ theme = "Sistema"
 EOF
     info "Config creada en ~/.config/aspire-team/config.toml"
 fi
+# Copy logo if not present
+if [[ ! -f "$HOME/.config/aspire-team/logo.txt" ]] && [[ -f "$SCRIPT_DIR/assets/logo.txt" ]]; then
+    cp "$SCRIPT_DIR/assets/logo.txt" "$HOME/.config/aspire-team/logo.txt"
+    info "Logo copiado a ~/.config/aspire-team/logo.txt"
+fi
 
 echo ""
 info "${BOLD}Listo!${RESET} Ejecuta con: ${BOLD}aspire-team${RESET}"
