@@ -716,8 +716,30 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Char('v') => { self.raw = !self.raw; return; }
             KeyCode::Char('[') => { self.cycle_job(-1); return; }
             KeyCode::Char(']') => { self.cycle_job(1); return; }
-            KeyCode::Tab => { self.goto((self.screen + 1) % 8); return; }
-            KeyCode::BackTab => { self.goto((self.screen + 7) % 8); return; }
+            KeyCode::Tab => {
+                if self.screen == 0 {
+                    self.scroll = self.scroll.saturating_add(1);
+                } else if self.screen == 1 {
+                    let n = self.filtered().len();
+                    if n > 0 { self.cursor[1] = (self.cursor[1] + 1) % n; }
+                } else {
+                    let n = acts_for(self.screen).len();
+                    if n > 0 { self.cursor[self.screen] = (self.cursor[self.screen] + 1) % n; }
+                }
+                return;
+            }
+            KeyCode::BackTab => {
+                if self.screen == 0 {
+                    self.scroll = self.scroll.saturating_sub(1);
+                } else if self.screen == 1 {
+                    let n = self.filtered().len();
+                    if n > 0 { self.cursor[1] = (self.cursor[1] + n - 1) % n; }
+                } else {
+                    let n = acts_for(self.screen).len();
+                    if n > 0 { self.cursor[self.screen] = (self.cursor[self.screen] + n - 1) % n; }
+                }
+                return;
+            }
             _ => {}
         }
 

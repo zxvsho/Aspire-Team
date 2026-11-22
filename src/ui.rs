@@ -448,6 +448,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 ("gg G", "Inicio / fin de la barra"),
                 ("gt gT", "Sección siguiente / anterior"),
                 ("g1..g8", "Ir a la sección N"),
+                ("Tab / Shift-Tab", "Moverse por las opciones del menú"),
                 ("j k", "Contenido: mover arriba / abajo"),
                 ("h l", "Contenido: enfocar lista / resultado"),
                 ("gg G · 0 $", "Contenido: inicio / fin"),
