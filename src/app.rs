@@ -696,7 +696,10 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 KeyCode::Char('g') => self.sidebar_cursor = 0,
                 KeyCode::Char('G') => self.sidebar_cursor = 7,
                 KeyCode::Enter => self.goto(self.sidebar_cursor),
-                KeyCode::Char('l') | KeyCode::Right => self.focus_out = self.cur.is_some() || self.screen == 0,
+                KeyCode::Char('l') | KeyCode::Right => {
+                    self.goto(self.sidebar_cursor);
+                    self.focus_out = true;
+                }
                 KeyCode::Char('h') | KeyCode::Left => {}
                 _ => {}
             }
