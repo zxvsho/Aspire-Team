@@ -346,9 +346,9 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     }
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
-        1 => "Tab/Shift-Tab mover  j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
+        1 => "j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
         0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  q salir",
-        _ => "Tab/Shift-Tab mover  j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
+        _ => "j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
     };
     let bottom = Line::from(vec![
         Span::styled("ASPIRE-TEAM", Style::new().fg(t.dim)),
@@ -447,7 +447,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 ("gg G", "Inicio / fin de la barra"),
                 ("gt gT", "Sección siguiente / anterior"),
                 ("g1..g8", "Ir a la sección N"),
-                ("Tab / Shift-Tab", "Moverse por las opciones del menú"),
+                ("Tab / Shift-Tab", "Sección siguiente / anterior"),
                 ("j k", "Contenido: mover arriba / abajo"),
                 ("h l", "Contenido: enfocar lista / resultado"),
                 ("gg G · 0 $", "Contenido: inicio / fin"),
