@@ -5,6 +5,9 @@
 #      o: ./install.sh
 set -euo pipefail
 
+# Asegurar directorio de trabajo válido (evita getcwd errors)
+cd "$HOME" 2>/dev/null || cd /tmp 2>/dev/null || true
+
 BOLD="\033[1m"; GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; CYAN="\033[36m"; RESET="\033[0m"
 info()  { echo -e "${BOLD}${GREEN}▸${RESET} $*"; }
 warn()  { echo -e "${BOLD}${YELLOW}!${RESET} $*"; }
@@ -22,14 +25,24 @@ info "Plataforma detectada: Linux"
 
 # ---------- sudo password ----------
 SUDO=""
-if [[ $EUID -ne 0 ]]; then
-    ask "Se necesita sudo para instalar dependencias. Contraseña:"
-    read -rs SUDO_PASS
-    echo ""
-    if ! echo "$SUDO_PASS" | sudo -S true 2>/dev/null; then
-        error "Contraseña incorrecta"
+if [[ "$PLATFORM" == "linux" ]]; then
+    if [[ $EUID -ne 0 ]]; then
+        ask "Se necesita sudo para instalar dependencias. Contraseña:"
+        # Leer desde /dev/tty para que funcione con curl | bash
+        if [[ -t 0 ]]; then
+            read -rs SUDO_PASS
+        else
+            read -rs SUDO_PASS < /dev/tty
+        fi
+        echo ""
+        if [[ -z "$SUDO_PASS" ]]; then
+            error "No se ingresó contraseña"
+        fi
+        if ! echo "$SUDO_PASS" | sudo -S true 2>/dev/null; then
+            error "Contraseña incorrecta"
+        fi
+        SUDO="echo $SUDO_PASS | sudo -S"
     fi
-    SUDO="echo $SUDO_PASS | sudo -S"
 fi
 
 run_sudo() {
