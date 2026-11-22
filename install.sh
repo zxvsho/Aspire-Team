@@ -29,10 +29,16 @@ if [[ "$PLATFORM" == "linux" ]]; then
     if [[ $EUID -ne 0 ]]; then
         ask "Se necesita sudo para instalar dependencias. Contraseña:"
         # Leer desde /dev/tty para que funcione con curl | bash
-        if [[ -t 0 ]]; then
+        # Leer contraseña: desde terminal si es posible
+        # Leer contraseña: desde terminal, /dev/tty, o variable de entorno
+        if [[ -n "${SUDO_PASS:-}" ]]; then
+            info "Usando contraseña de variable SUDO_PASS"
+        elif [[ -t 0 ]]; then
             read -rs SUDO_PASS
-        else
+        elif [[ -c /dev/tty ]]; then
             read -rs SUDO_PASS < /dev/tty
+        else
+            error "No se puede leer la contraseña. Ejecuta: SUDO_PASS=tu_contraseña bash install.sh"
         fi
         echo ""
         if [[ -z "$SUDO_PASS" ]]; then
