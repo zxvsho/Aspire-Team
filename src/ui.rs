@@ -84,7 +84,7 @@ fn sidebar(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         .iter()
         .enumerate()
         .map(|(i, (ic, name))| {
-            let sel = i == app.screen;
+            let sel = i == app.sidebar_cursor;
             let line = Line::from(vec![
                 Span::styled(if sel { "▍" } else { " " }, Style::new().fg(t.accent)),
                 Span::styled(format!("{} ", i + 1), Style::new().fg(t.dim)),
@@ -171,14 +171,13 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     ]));
     lines.push(Line::raw(""));
     for (k, d) in [
+        ("j k", "navegar barra lateral"),
+        ("Enter", "seleccionar sección"),
+        ("l", "entrar al contenido"),
+        ("h", "volver a la barra lateral"),
+        ("gg G", "inicio / fin de la barra"),
         ("gt gT", "sección siguiente / anterior"),
-        ("Ngt", "ir a la sección N (1-8)"),
-        ("j k  h l", "mover / enfocar lista ↔ resultado"),
-        ("gg G", "inicio / fin de la lista"),
-        ("Ctrl-d u", "media página abajo / arriba"),
-        ("Ctrl-f b", "página completa abajo / arriba"),
-        ("/ n N", "filtrar · siguiente · anterior"),
-        ("Enter", "ejecutar acción · en Biblioteca abre el menú"),
+        ("g1..g8", "ir a la sección N"),
         ("Space", "tecla líder (which-key)"),
         (":", "ejecutar cualquier comando de aurelia"),
         ("T", "cambiar tema (incluye «Sistema»)"),
@@ -327,8 +326,8 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     }
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
-        1 => "j/k mover  gg/G  / filtrar  Enter menú  p jugar  o opciones  ? ayuda",
-        0 => "1-8 secciones  : comando  T tema  Space líder  ? ayuda  q salir",
+        1 => "j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
+        0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  q salir",
         _ => "j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
     };
     f.render_widget(Paragraph::new(Span::styled(hints, Style::new().fg(t.dim))), rows[1]);
@@ -416,9 +415,16 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
         }
         Overlay::Help => {
             let rows = [
-                ("1-8 · gt gT", "Secciones"),
-                ("j k · h l", "Mover / enfocar lista ↔ resultado"),
-                ("gg G · 0 $", "Inicio / fin de la lista"),
+                ("j k", "Barra lateral: navegar secciones"),
+                ("Enter", "Seleccionar sección"),
+                ("l", "Entrar al contenido"),
+                ("h", "Volver a la barra lateral"),
+                ("gg G", "Inicio / fin de la barra"),
+                ("gt gT", "Sección siguiente / anterior"),
+                ("g1..g8", "Ir a la sección N"),
+                ("j k", "Contenido: mover arriba / abajo"),
+                ("h l", "Contenido: enfocar lista / resultado"),
+                ("gg G · 0 $", "Contenido: inicio / fin"),
                 ("Ctrl-d u · f b", "Media página / página completa"),
                 ("H M L", "Arriba / centro / abajo de la vista"),
                 ("Enter", "Ejecutar acción (Biblioteca: menú)"),

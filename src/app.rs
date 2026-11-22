@@ -81,6 +81,7 @@ fn cfg_dir() -> PathBuf {
 
 pub struct App {
     pub screen: usize,
+    pub sidebar_cursor: usize,
     pub cursor: [usize; 8],
     pub focus_out: bool,
     pub scroll: u16,
@@ -120,6 +121,7 @@ impl App {
         let logo_txt = std::fs::read_to_string(cfg_dir().join("logo.txt")).unwrap_or_else(|_| LOGO.to_string());
         let mut app = App {
             screen: 0,
+            sidebar_cursor: 0,
             cursor: [0; 8],
             focus_out: false,
             scroll: 0,
@@ -606,6 +608,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
 
     fn goto(&mut self, s: usize) {
         self.screen = s.min(7);
+        self.sidebar_cursor = self.screen;
         self.focus_out = false;
         self.scroll = 0;
         self.list_state = ListState::default();
@@ -618,41 +621,32 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             return;
         }
 
-        // ---- prefijo g (gg, gt, gT) ----
+        // ---- prefijo g (gg, gt, gT, g1..g8) ----
         if self.g_pending {
             self.g_pending = false;
             match k.code {
                 KeyCode::Char('g') => {
-                    self.count = None;
                     if self.focus_out {
                         self.scroll = 0;
                     } else {
-                        self.cursor[self.screen] = 0;
+                        self.sidebar_cursor = 0;
                     }
                     return;
                 }
                 KeyCode::Char('t') => {
-                    let n = self.count.take();
-                    let next = match n {
-                        Some(n) => (n - 1).min(7),
-                        None => (self.screen + 1) % 8,
-                    };
+                    let next = (self.sidebar_cursor + 1) % 8;
                     self.goto(next);
                     return;
                 }
                 KeyCode::Char('T') => {
-                    self.goto((self.screen + 7) % 8);
+                    self.goto((self.sidebar_cursor + 7) % 8);
                     return;
                 }
                 KeyCode::Char(c @ '1'..='8') => {
-                    // g1..g8 como atajo directo
                     self.goto(c as usize - '1' as usize);
                     return;
                 }
-                _ => {
-                    self.count = None;
-                    return;
-                }
+                _ => return,
             }
         }
 
@@ -678,57 +672,55 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             return;
         }
 
-        // ---- 1-8: saltar de sección (menú) ----
-        if let KeyCode::Char(c @ '1'..='8') = k.code {
-            self.goto(c as usize - '1' as usize);
-            return;
-        }
-        // ---- 0: inicio de lista ----
-        if let KeyCode::Char('0') = k.code {
-            if self.focus_out {
-                self.scroll = 0;
-            } else {
-                self.cursor[self.screen] = 0;
-            }
-            return;
-        }
-
-        let count = self.count.take();
-        let mult = |base: i32| count.map(|c| (c as i32).saturating_mul(base)).unwrap_or(base);
-
+        // ---- teclas globales ----
         match k.code {
-            KeyCode::Char('q') => self.quit = true,
-            KeyCode::Char('?') => self.overlay = Overlay::Help,
-            KeyCode::Char(' ') => self.leader = true,
-            KeyCode::Char('g') => {
-                self.g_pending = true;
-                self.count = count;
+            KeyCode::Char(' ') => { self.leader = true; return; }
+            KeyCode::Char('T') => { self.overlay = Overlay::Theme { cursor: self.theme, orig: self.theme }; return; }
+            KeyCode::Char('?') => { self.overlay = Overlay::Help; return; }
+            KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
+            KeyCode::Char('g') => { self.g_pending = true; return; }
+            KeyCode::Char('q') => { self.quit = true; return; }
+            KeyCode::Char('v') => { self.raw = !self.raw; return; }
+            KeyCode::Char('[') => { self.cycle_job(-1); return; }
+            KeyCode::Char(']') => { self.cycle_job(1); return; }
+            KeyCode::Tab => { self.goto((self.screen + 1) % 8); return; }
+            KeyCode::BackTab => { self.goto((self.screen + 7) % 8); return; }
+            _ => {}
+        }
+
+        // ---- barra lateral enfocada (hjkl para moverse) ----
+        if !self.focus_out {
+            match k.code {
+                KeyCode::Char('j') | KeyCode::Down => self.sidebar_cursor = (self.sidebar_cursor + 1) % 8,
+                KeyCode::Char('k') | KeyCode::Up => self.sidebar_cursor = (self.sidebar_cursor + 7) % 8,
+                KeyCode::Char('g') => self.sidebar_cursor = 0,
+                KeyCode::Char('G') => self.sidebar_cursor = 7,
+                KeyCode::Enter => self.goto(self.sidebar_cursor),
+                KeyCode::Char('l') | KeyCode::Right => self.focus_out = self.cur.is_some() || self.screen == 0,
+                KeyCode::Char('h') | KeyCode::Left => {}
+                _ => {}
             }
-            KeyCode::Char('T') => self.overlay = Overlay::Theme { cursor: self.theme, orig: self.theme },
-            KeyCode::Char('J') => self.show_jobs = !self.show_jobs,
-            KeyCode::Char(':') => self.prompt("aurelia", String::new(), PKind::Palette),
-            KeyCode::Tab => self.goto((self.screen + 1) % 8),
-            KeyCode::BackTab => self.goto((self.screen + 7) % 8),
-            KeyCode::Char('j') | KeyCode::Down => self.move_by(mult(1)),
-            KeyCode::Char('k') | KeyCode::Up => self.move_by(-mult(1)),
-            KeyCode::Char('d') if ctrl => self.move_by(mult(10)),
-            KeyCode::Char('u') if ctrl => self.move_by(-mult(10)),
-            KeyCode::Char('f') if ctrl => self.move_by(mult(20)),
-            KeyCode::Char('b') if ctrl => self.move_by(-mult(20)),
-            KeyCode::PageDown => self.move_by(mult(10)),
-            KeyCode::PageUp => self.move_by(-mult(10)),
+            return;
+        }
+
+        // ---- contenido enfocado ----
+        match k.code {
+            KeyCode::Char('j') | KeyCode::Down => self.move_by(1),
+            KeyCode::Char('k') | KeyCode::Up => self.move_by(-1),
+            KeyCode::Char('d') if ctrl => self.move_by(10),
+            KeyCode::Char('u') if ctrl => self.move_by(-10),
+            KeyCode::Char('f') if ctrl => self.move_by(20),
+            KeyCode::Char('b') if ctrl => self.move_by(-20),
+            KeyCode::PageDown => self.move_by(10),
+            KeyCode::PageUp => self.move_by(-10),
             KeyCode::Char('G') => {
-                if self.focus_out {
-                    self.scroll = u16::MAX / 2;
-                } else if self.screen > 0 {
-                    self.cursor[self.screen] = self.list_len().saturating_sub(1);
+                if !self.focus_out && self.screen > 0 {
+                    self.cursor[self.screen] = self.list_len().saturating_sub(1)
                 }
             }
             KeyCode::Char('$') => {
-                if self.focus_out {
-                    self.scroll = u16::MAX / 2;
-                } else if self.screen > 0 {
-                    self.cursor[self.screen] = self.list_len().saturating_sub(1);
+                if !self.focus_out && self.screen > 0 {
+                    self.cursor[self.screen] = self.list_len().saturating_sub(1)
                 }
             }
             KeyCode::Char('H') => self.move_by(-(self.list_len() as i32)),
@@ -742,17 +734,11 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                     self.cursor[self.screen] = self.list_len().saturating_sub(1);
                 }
             }
-            KeyCode::Char('l') | KeyCode::Right => self.focus_out = self.cur.is_some() || self.screen == 0,
             KeyCode::Char('h') | KeyCode::Left => self.focus_out = false,
+            KeyCode::Char('l') | KeyCode::Right => self.focus_out = self.cur.is_some() || self.screen == 0,
             KeyCode::Char('v') => self.raw = !self.raw,
-            KeyCode::Char('[') => self.cycle_job(-1),
-            KeyCode::Char(']') => self.cycle_job(1),
-            KeyCode::Char('n') => {
-                self.search_next(self.search_dir.max(1));
-            }
-            KeyCode::Char('N') => {
-                self.search_next(-1);
-            }
+            KeyCode::Char('n') => self.search_next(1),
+            KeyCode::Char('N') => self.search_next(-1),
             KeyCode::Char('r') => {
                 if self.screen == 1 {
                     self.reload_library();
@@ -776,22 +762,24 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
     }
 
     fn search_next(&mut self, dir: i32) {
-        if self.screen != 1 || self.last_search.is_empty() {
+        if self.screen != 1 {
+            return;
+        }
+        let filtered = self.filtered();
+        let n = filtered.len();
+        if n == 0 || self.last_search.is_empty() {
             return;
         }
         let f = self.last_search.to_lowercase();
-        let n = self.list_len();
-        if n == 0 {
-            return;
-        }
         let start = self.cursor[1] as i32;
         for step in 1..=n {
             let idx = ((start + dir * step as i32).rem_euclid(n as i32)) as usize;
-            if self.games[self.filtered()[idx]].name.to_lowercase().contains(&f)
-                || self.games[self.filtered()[idx]].id.contains(&f)
-            {
-                self.cursor[1] = idx;
-                return;
+            if idx < filtered.len() {
+                let g = &self.games[filtered[idx]];
+                if g.name.to_lowercase().contains(&f) || g.id.contains(&f) {
+                    self.cursor[1] = idx;
+                    return;
+                }
             }
         }
     }

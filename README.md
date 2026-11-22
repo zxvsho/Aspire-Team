@@ -81,17 +81,18 @@ Variable `ASPIRE_AURELIA_BIN` para usar otro binario de aurelia.
 
 | Tecla | Acción |
 |---|---|
-| `1-8` | cambiar de sección |
-| `j` `k` | mover abajo / arriba |
-| `h` `l` | enfocar lista ↔ resultado |
-| `gg` `G` | inicio / fin de la lista |
-| `0` `$` | inicio / fin |
+| `j` `k` | barra lateral: navegar secciones · contenido: mover |
+| `Enter` | seleccionar sección / ejecutar acción |
+| `l` | entrar al contenido |
+| `h` | volver a la barra lateral |
+| `gg` `G` | inicio / fin de la barra o lista |
+| `gt` `gT` | sección siguiente / anterior |
+| `g1`..`g8` | ir a la sección N |
+| `0` `$` | inicio / fin de la lista |
 | `Ctrl-d` `Ctrl-u` | media página |
 | `Ctrl-f` `Ctrl-b` | página completa |
 | `H` `M` `L` | arriba / centro / abajo |
-| `gt` `gT` `Ngt` | sección siguiente / anterior / N |
 | `/` `n` `N` | filtrar · siguiente · anterior |
-| `Enter` | ejecutar acción (Biblioteca: menú del juego) |
 | `Space` | tecla líder (which-key) |
 | `:` | comando libre de aurelia |
 | `T` | cambiar tema |
