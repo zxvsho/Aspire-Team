@@ -58,24 +58,28 @@ info "Rust: $(rustc --version)"
 
 # ---------- Aurelia ----------
 if ! command -v aurelia >/dev/null 2>&1; then
-    info "Instalando Aurelia..."
+    info "Instalando Aurelia desde repositorios oficiales..."
     if [[ "$PLATFORM" == "linux" ]]; then
-        if command -v yay >/dev/null 2>&1; then
-            info "Usando yay (Arch)..."
-            yay -S --noconfirm aurelia 2>/dev/null || cargo install aurelia
-        elif command -v pacman >/dev/null 2>&1; then
-            warn "Aurelia no está en repos oficiales. Instalando via cargo..."
-            cargo install aurelia
+        if command -v pacman >/dev/null 2>&1; then
+            info "Usando pacman (Arch)..."
+            run_sudo pacman -S --needed --noconfirm aurelia
         elif command -v apt-get >/dev/null 2>&1; then
-            warn "Aurelia no está en apt. Instalando via cargo..."
-            cargo install aurelia
+            info "Usando apt (Debian/Ubuntu)..."
+            run_sudo apt-get update -qq
+            run_sudo apt-get install -y -qq aurelia
+        elif command -v dnf >/dev/null 2>&1; then
+            info "Usando dnf (Fedora)..."
+            run_sudo dnf install -y aurelia
         else
+            warn "Gestor de paquetes no reconocido. Instalando via cargo..."
             cargo install aurelia
         fi
     elif [[ "$PLATFORM" == "macos" ]]; then
         if command -v brew >/dev/null 2>&1; then
-            brew install aurelia 2>/dev/null || cargo install aurelia
+            info "Usando Homebrew..."
+            brew install aurelia
         else
+            warn "Homebrew no encontrado. Instalando via cargo..."
             cargo install aurelia
         fi
     fi

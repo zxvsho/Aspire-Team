@@ -25,7 +25,14 @@ Info "Rust: $(rustc --version)"
 # ---------- Aurelia ----------
 if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
     Info "Instalando Aurelia..."
-    cargo install aurelia
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        winget install --id Drackrath.Aurelia -e --silent 2>$null
+        if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
+            cargo install aurelia
+        }
+    } else {
+        cargo install aurelia
+    }
 } else {
     Info "Aurelia: $(aurelia --version 2>&1 | Select-Object -First 1)"
 }

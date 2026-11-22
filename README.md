@@ -7,8 +7,9 @@ Backend: Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team 
 ## Requisitos
 
 - [Rust](https://rustup.rs/) (1.97 o superior)
-- [Aurelia](https://github.com/Drackrath/Aurelia) instalado y con sesión iniciada (`aurelia login`)
-- Steam con una cuenta con sesión iniciada (Aurelia la reutiliza automáticamente)
+- [Aurelia](https://github.com/Drackrath/Aurelia) instalado (se instala automáticamente con el script)
+
+Aurelia gestiona la sesión de Steam por su cuenta: si ya tienes Steam con sesión iniciada, la reutiliza; si no, Aurelia te permite iniciar sesión dentro de la app. No necesitas tener Steam instalado para usar Aspire-Team.
 
 ## Instalación rápida (un comando)
 
@@ -145,7 +146,7 @@ Biblioteca → Enter → «Aplicar parche/mod local»: copia una carpeta sobre e
 
 ## Acerca de Aurelia
 
-Aurelia gestiona juegos de Steam de la cuenta con sesión iniciada. Si ya tienes Steam con sesión iniciada, Aurelia la reutiliza automáticamente (no necesitas volver a iniciar sesión en Steam). Solo ejecuta `aurelia login` la primera vez.
+Aurelia gestiona juegos de Steam. Si ya tienes Steam con sesión iniciada, Aurelia la reutiliza automáticamente; si no, puedes iniciar sesión desde la app (Sistema → Iniciar sesión). No necesitas tener Steam instalado para usar Aspire-Team.
 
 Códigos de salida propios: 80-84 (login QR), 85 `disk_full`, 86 `offline`, 87 `steam_config_mismatch`.
 
