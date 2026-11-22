@@ -665,15 +665,6 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                     }
                     return;
                 }
-                KeyCode::Char('t') => {
-                    let next = (self.sidebar_cursor + 1) % 8;
-                    self.goto(next);
-                    return;
-                }
-                KeyCode::Char('T') => {
-                    self.goto((self.sidebar_cursor + 7) % 8);
-                    return;
-                }
                 KeyCode::Char(c @ '1'..='8') => {
                     self.goto(c as usize - '1' as usize);
                     return;
