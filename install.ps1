@@ -2,11 +2,11 @@
 # Uso: iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
 #      o: .\install.ps1
 # Requiere: PowerShell como Administrador
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 function Info  { Write-Host "▸ $args" -ForegroundColor Green }
 function Warn  { Write-Host "! $args" -ForegroundColor Yellow }
-function Fail  { Write-Host "✗ $args" -ForegroundColor Red; exit 1 }
+function Fail  { Write-Host "✗ $args" -ForegroundColor Red }
 
 # ---------- Verificar admin ----------
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -14,35 +14,65 @@ if (-not $isAdmin) {
     Warn "Se requieren permisos de Administrador."
     Warn "Ejecuta PowerShell como Administrador y vuelve a correr el script."
     Fail "Sin permisos de administrador."
+    exit 1
 }
 
 # ---------- Rust ----------
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Info "Instalando Rust via rustup..."
+    Info "Instalando Rust..."
+    $rustInstalled = $false
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id Rustlang.Rustup -e --silent --accept-package-agreements --accept-source-agreements
-    } else {
-        $rustupUrl = "https://win.rustup.rs/x86_64"
-        $rustupPath = "$env:TEMP\rustup-init.exe"
-        Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath
-        & $rustupPath -y
+        try {
+            winget install --id Rustlang.Rustup -e --silent --accept-package-agreements --accept-source-agreements 2>$null
+            $rustInstalled = $true
+        } catch {
+            Warn "winget falló, intentando rustup directo..."
+        }
+    }
+    if (-not $rustInstalled -or -not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+        try {
+            $rustupUrl = "https://win.rustup.rs/x86_64"
+            $rustupPath = "$env:TEMP\rustup-init.exe"
+            Invoke-WebRequest -Uri $rustupUrl -OutFile $rustupPath -ErrorAction Stop
+            & $rustupPath -y
+            $rustInstalled = $true
+        } catch {
+            Fail "No se pudo instalar Rust. Instálalo manualmente desde https://rustup.rs/"
+            exit 1
+        }
     }
     $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-    # Refresh PATH from registry
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
-Info "Rust: $(rustc --version)"
+if (Get-Command rustc -ErrorAction SilentlyContinue) {
+    Info "Rust: $(rustc --version)"
+} else {
+    Fail "Rust no se instaló correctamente."
+    exit 1
+}
 
 # ---------- Aurelia ----------
 if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
     Info "Instalando Aurelia..."
+    $aureliaInstalled = $false
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        winget install --id Drackrath.Aurelia -e --silent --accept-package-agreements --accept-source-agreements 2>$null
-        if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
-            cargo install aurelia
+        try {
+            winget install --id Drackrath.Aurelia -e --silent --accept-package-agreements --accept-source-agreements 2>$null
+            if (Get-Command aurelia -ErrorAction SilentlyContinue) {
+                $aureliaInstalled = $true
+            }
+        } catch {
+            Warn "winget falló para Aurelia..."
         }
-    } else {
-        cargo install aurelia
+    }
+    if (-not $aureliaInstalled) {
+        try {
+            cargo install aurelia
+            $aureliaInstalled = $true
+        } catch {
+            Fail "No se pudo instalar Aurelia."
+            exit 1
+        }
     }
 } else {
     Info "Aurelia: $(aurelia --version 2>&1 | Select-Object -First 1)"
@@ -50,10 +80,30 @@ if (-not (Get-Command aurelia -ErrorAction SilentlyContinue)) {
 
 # ---------- Compilar Aspire-Team ----------
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $ScriptDir) { $ScriptDir = Get-Location }
 Set-Location $ScriptDir
 Info "Compilando Aspire-Team (esto puede tardar unos minutos)..."
-cargo build --release
-cargo install --path . --force
+$buildOk = $false
+try {
+    cargo build --release
+    if ($LASTEXITCODE -eq 0) { $buildOk = $true }
+} catch {
+    Warn "cargo build falló, reintentando..."
+}
+if (-not $buildOk) {
+    try {
+        cargo build --release
+        if ($LASTEXITCODE -eq 0) { $buildOk = $true }
+    } catch {
+        Fail "No se pudo compilar Aspire-Team."
+        exit 1
+    }
+}
+try {
+    cargo install --path . --force
+} catch {
+    Warn "cargo install falló, pero el binario está en target/release/"
+}
 
 # ---------- Config ----------
 $ConfigDir = Join-Path $env:APPDATA "aspire-team"

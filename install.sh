@@ -110,8 +110,19 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 info "Compilando Aspire-Team (esto puede tardar unos minutos)..."
-cargo build --release
-cargo install --path . --force
+BUILD_OK=false
+if cargo build --release 2>&1; then
+    BUILD_OK=true
+else
+    warn "Primer intento falló, reintentando..."
+    if cargo build --release 2>&1; then
+        BUILD_OK=true
+    fi
+fi
+if [[ "$BUILD_OK" != "true" ]]; then
+    error "No se pudo compilar Aspire-Team. Verifica que Rust esté instalado correctamente."
+fi
+cargo install --path . --force || warn "cargo install falló, pero el binario está en target/release/"
 
 # ---------- Config ----------
 mkdir -p "$HOME/.config/aspire-team"

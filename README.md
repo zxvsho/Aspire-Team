@@ -21,7 +21,15 @@ El script pide la contraseña de sudo (en Linux) e instala todo automáticamente
 curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
 ```
 
-El script pide la contraseña de sudo e instala todo automáticamente: dependencias del sistema, Rust, Aurelia y Aspire-Team. Funciona en cualquier distro Linux.
+El script pide la contraseña de sudo e instala todo automáticamente: dependencias del sistema, Rust, Aurelia y Aspire-Team. Funciona en cualquier distro Linux. Los comandos son tolerantes a fallos: si un método falla, intenta el siguiente.
+
+### Windows (PowerShell como Administrador)
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
+```
+
+Requiere PowerShell ejecutado como Administrador. El script instala Rust (winget o rustup), Aurelia (winget o cargo) y compila Aspire-Team. Si un paso falla, intenta el siguiente método automáticamente.
 
 ### Clonando el repo
 
@@ -29,6 +37,7 @@ El script pide la contraseña de sudo e instala todo automáticamente: dependenc
 git clone https://github.com/zxvsho/Aspire-Team.git
 cd Aspire-Team
 chmod +x install.sh && ./install.sh   # Linux
+# Windows: .\install.ps1 (como Administrador)
 ```
 
 ```bash
