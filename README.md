@@ -13,7 +13,7 @@ Aurelia gestiona la sesión de Steam por su cuenta: si ya tienes Steam con sesi�
 
 ## Instalación rápida (un comando)
 
-El script pide la contraseña de sudo (en Linux/macOS) e instala todo automáticamente: Rust, Aurelia y Aspire-Team.
+El script pide la contraseña de sudo (en Linux) e instala todo automáticamente: Rust, Aurelia y Aspire-Team.
 
 ### Linux (Arch / CachyOS / Artix / Debian / Fedora)
 
@@ -33,12 +33,6 @@ curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh 
 iwr -useb https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.ps1 | iex
 ```
 
-### macOS
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash
-```
-
 El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Team.
 
 ### Clonando el repo
@@ -46,7 +40,7 @@ El script instala Rust (si no está), Aurelia (si no está) y compila Aspire-Tea
 ```bash
 git clone https://github.com/zxvsho/Aspire-Team.git
 cd Aspire-Team
-chmod +x install.sh && ./install.sh   # Linux / macOS
+chmod +x install.sh && ./install.sh   # Linux
 # o en Windows: .\install.ps1
 ```
 
@@ -166,7 +160,7 @@ Aspire-Team expone todo lo que ofrece Aurelia para instalar y gestionar compleme
 | **Workshop** | Mods y parches → Workshop: explorar / instalar / suscribirse |
 | **Depots / versiones** | Mods y parches → Depots, Ramas, Degradar, Fijar versión |
 
-Funciona igual en **Windows** y **Linux** (macOS con limitaciones de Aurelia).
+Funciona igual en **Windows** y **Linux**.
 
 - **Aurelia** — https://github.com/Drackrath/Aurelia (cliente de Steam por línea de comandos en Rust). Aspire-Team es un frontend que llama a `aurelia --json`.
 - **ratatui** — https://github.com/ratatui/ratatui (framework TUI en Rust).
