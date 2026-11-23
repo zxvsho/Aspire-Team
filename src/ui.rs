@@ -250,9 +250,6 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
             lines.push(kv("Portada", v.to_string()));
         }
         lines.push(Line::raw(""));
-        lines.push(Line::styled("── completo ──", Style::new().fg(t.dim)));
-        lines.extend(kv_lines(&g.raw, t));
-        lines.push(Line::raw(""));
         lines.push(Line::styled("Enter: acciones · p jugar · o opciones · I instalar · u actualizar · K info", Style::new().fg(t.dim)));
         let h = cols[1].height.saturating_sub(2);
         let max = lines.len().saturating_sub(h as usize) as u16;
