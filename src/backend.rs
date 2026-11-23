@@ -82,6 +82,56 @@ where
 
 /// Comandos que piden teclado (login, chat…): se ejecutan con la terminal completa.
 pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
+    if args.first().map(|s| s.as_str()) == Some("self-update") {
+        // Actualizar Aspire-Team desde GitHub
+        let script = r#"
+            set -e
+            echo "▸ Actualizando Aspire-Team..."
+            cd ~/.local/share/aspire-team-src 2>/dev/null || {
+                mkdir -p ~/.local/share
+                git clone https://github.com/zxvsho/Aspire-Team.git ~/.local/share/aspire-team-src
+                cd ~/.local/share/aspire-team-src
+            }
+            git pull origin main
+            cargo build --release
+            cargo install --path . --force
+            echo ""
+            echo "✔ Aspire-Team actualizado. Reinicia la app."
+        "#;
+        let status = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(script)
+            .status()?;
+        println!("\n[actualización terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
+        let mut s = String::new();
+        std::io::stdin().read_line(&mut s)?;
+        return Ok(());
+    }
+    if args.first().map(|s| s.as_str()) == Some("update-aurelia") {
+        let script = r#"
+            set -e
+            echo "▸ Actualizando Aurelia..."
+            if command -v pacman >/dev/null 2>&1; then
+                sudo pacman -Sy --noconfirm aurelia
+            elif command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update -qq && sudo apt-get install -y -qq --only-upgrade aurelia
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf upgrade -y aurelia
+            else
+                cargo install aurelia --force
+            fi
+            echo ""
+            echo "✔ Aurelia actualizado. Versión: $(aurelia --version 2>&1 | head -1)"
+        "#;
+        let status = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(script)
+            .status()?;
+        println!("\n[actualización terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
+        let mut s = String::new();
+        std::io::stdin().read_line(&mut s)?;
+        return Ok(());
+    }
     let status = Command::new(bin()).args(args).status()?;
     println!("\n[aurelia terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
     let mut s = String::new();
@@ -93,7 +143,7 @@ pub fn is_interactive(args: &[String]) -> bool {
     let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     matches!(
         a.as_slice(),
-        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..]
+        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..] | ["self-update"] | ["update-aurelia"]
     )
 }
 

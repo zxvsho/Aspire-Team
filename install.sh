@@ -218,9 +218,9 @@ EOF
 else
     ok "Config existente conservada"
 fi
-if [[ ! -f "$HOME/.config/aspire-team/logo.txt" ]] && [[ -f "$SCRIPT_DIR/assets/logo.txt" ]]; then
+if [[ -f "$SCRIPT_DIR/assets/logo.txt" ]]; then
     cp "$SCRIPT_DIR/assets/logo.txt" "$HOME/.config/aspire-team/logo.txt"
-    ok "Logo copiado a ~/.config/aspire-team/logo.txt"
+    ok "Logo actualizado en ~/.config/aspire-team/logo.txt"
 fi
 
 # ---------- Final ----------
