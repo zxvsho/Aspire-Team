@@ -347,7 +347,7 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
         1 => "j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
-        0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  q salir",
+        0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  Ctrl-c salir",
         _ => "j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
     };
     let bottom = Line::from(vec![
@@ -461,7 +461,8 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 ("v", "Resultado formateado / crudo"),
                 ("[ ]  J", "Trabajos"),
                 ("T", "Tema (Sistema lee theme-engine)"),
-                ("q · Ctrl-c", "Salir"),
+                ("Ctrl-c", "Salir"),
+                (":q", "Salir (comando)"),
             ];
             let r = centered(area, 74.min(area.width), rows.len() as u16 + 2);
             f.render_widget(Clear, r);

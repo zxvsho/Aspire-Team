@@ -508,6 +508,11 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 match p.kind {
                     PKind::Act(act, app) => self.exec(act, app, input),
                     PKind::Palette => {
+                        let trimmed = input.trim().to_lowercase();
+                        if trimmed == "q" || trimmed == "quit" || trimmed == "q!" || trimmed == "exit" {
+                            self.quit = true;
+                            return;
+                        }
                         let mut args = split_args(&input);
                         if args.first().map(|s| s == "aurelia").unwrap_or(false) {
                             args.remove(0);
@@ -703,7 +708,6 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
             KeyCode::Char('g') => { self.g_pending = true; return; }
             KeyCode::Char(c @ '1'..='8') => { self.goto(c as usize - '1' as usize); return; }
-            KeyCode::Char('q') => { self.quit = true; return; }
             KeyCode::Char('v') => { self.raw = !self.raw; return; }
             KeyCode::Char('[') => { self.cycle_job(-1); return; }
             KeyCode::Char(']') => { self.cycle_job(1); return; }
@@ -762,14 +766,14 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 }
             }
             KeyCode::Char('h') | KeyCode::Left => self.focus_out = false,
-            KeyCode::Char('l') | KeyCode::Right => {
+            KeyCode::Char('l') | KeyCode::Right => self.focus_out = true,
+            KeyCode::Char('n') => {
                 if !self.focus_out {
                     self.activate();
                 }
                 self.focus_out = true;
             }
             KeyCode::Char('v') => self.raw = !self.raw,
-            KeyCode::Char('n') => self.search_next(1),
             KeyCode::Char('N') => self.search_next(-1),
             KeyCode::Char('r') => {
                 if self.screen == 1 {
