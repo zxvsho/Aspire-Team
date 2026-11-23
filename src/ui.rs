@@ -143,7 +143,7 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
 fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     let mut lines: Vec<Line> = vec![Line::raw("")];
     for l in &app.logo {
-        lines.push(Line::styled(l.trim_end().to_string(), Style::new().fg(t.accent).bold()));
+        lines.push(Line::styled(l.clone(), Style::new().fg(t.accent).bold()));
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled("Aurelia, con una interfaz que no necesita manual", Style::new().fg(t.accent2)));

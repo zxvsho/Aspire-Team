@@ -86,6 +86,13 @@ run_sudo() {
     fi
 }
 
+# ---------- Modo actualización ----------
+UPDATE_MODE=false
+if [[ "${1:-}" == "--update" ]] || [[ "${1:-}" == "-u" ]]; then
+    UPDATE_MODE=true
+    info "Modo actualización activado"
+fi
+
 # ---------- Rust ----------
 step "Verificando Rust..."
 if ! command -v cargo >/dev/null 2>&1; then
@@ -125,7 +132,19 @@ if [[ "$DEPS_OK" == "true" ]]; then ok "Dependencias instaladas"; else warn "Dep
 
 # ---------- Aurelia ----------
 step "Instalando Aurelia..."
-if ! command -v aurelia >/dev/null 2>&1; then
+if [[ "$UPDATE_MODE" == "true" ]]; then
+    info "Actualizando Aurelia..."
+    if command -v pacman >/dev/null 2>&1; then
+        run_sudo pacman -Sy --noconfirm aurelia 2>/dev/null || cargo install aurelia --force
+    elif command -v apt-get >/dev/null 2>&1; then
+        run_sudo apt-get update -qq && run_sudo apt-get install -y -qq --only-upgrade aurelia 2>/dev/null || cargo install aurelia --force
+    elif command -v dnf >/dev/null 2>&1; then
+        run_sudo dnf upgrade -y aurelia 2>/dev/null || cargo install aurelia --force
+    else
+        cargo install aurelia --force
+    fi
+    ok "Aurelia actualizado"
+elif ! command -v aurelia >/dev/null 2>&1; then
     INSTALLED=false
     if command -v pacman >/dev/null 2>&1; then
         if run_sudo pacman -S --needed --noconfirm aurelia 2>/dev/null; then INSTALLED=true; fi
@@ -165,6 +184,12 @@ else
     SCRIPT_DIR="$CLONE_DIR"
 fi
 cd "$SCRIPT_DIR"
+if [[ "$UPDATE_MODE" == "true" ]] && [[ -d "$HOME/.local/share/aspire-team-src/.git" ]]; then
+    info "Actualizando código fuente..."
+    cd "$HOME/.local/share/aspire-team-src" && git pull origin main 2>/dev/null || true
+    SCRIPT_DIR="$HOME/.local/share/aspire-team-src"
+    cd "$SCRIPT_DIR"
+fi
 info "Esto puede tardar unos minutos..."
 BUILD_OK=false
 if cargo build --release 2>&1 | tail -3; then

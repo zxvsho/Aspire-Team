@@ -26,6 +26,20 @@ curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh 
 
 El script pide la contraseña de sudo al inicio (solo una vez) e instala todo automáticamente: dependencias del sistema, Rust, Aurelia y Aspire-Team. Funciona en cualquier distro Linux. Los comandos son tolerantes a fallos: si un método falla, intenta el siguiente.
 
+### Actualizar
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zxvsho/Aspire-Team/main/install.sh | bash -s -- --update
+```
+
+O si ya clonaste el repo:
+
+```bash
+cd Aspire-Team && git pull && ./install.sh --update
+```
+
+Actualiza Aurelia y Aspire-Team a la última versión.
+
 
 ### Windows (PowerShell como Administrador)
 
