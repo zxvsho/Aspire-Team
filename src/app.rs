@@ -12,13 +12,13 @@ use std::{
 };
 
 pub const SCREENS: [(&str, &str); 8] = [
-    ("◆", "Inicio"),
-    ("▣", "Biblioteca"),
+    ("🏠", "Inicio"),
+    ("📚", "Biblioteca"),
     ("⬇", "Instalaciones"),
-    ("★", "Tienda"),
+    ("🛒", "Tienda"),
     ("⚒", "Mods y parches"),
-    ("⊕", "Complementos"),
-    ("✉", "Social"),
+    ("🔌", "Complementos"),
+    ("👥", "Social"),
     ("⚙", "Sistema"),
 ];
 
