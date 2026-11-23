@@ -489,6 +489,10 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 self.trigger(&GAME_ACTS[c]);
                 return;
             }
+            KeyCode::Char('n') => {
+                self.trigger(&GAME_ACTS[c]);
+                return;
+            }
             _ => {}
         }
         self.overlay = Overlay::Menu(c);
