@@ -141,13 +141,14 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
 }
 
 fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
-    let max_w = app.logo.iter().map(|l| unicode_width::UnicodeWidthStr::width(l.trim_end())).max().unwrap_or(0);
     let mut lines: Vec<Line> = vec![Line::raw("")];
-    for l in &app.logo {
-        let trimmed = l.trim_end();
-        let w = unicode_width::UnicodeWidthStr::width(trimmed);
-        let pad = max_w - w;
-        lines.push(Line::styled(format!("{}{}", trimmed, " ".repeat(pad)), Style::new().fg(t.accent).bold()));
+    for (idx, l) in app.logo.iter().enumerate() {
+        let display = if idx == 0 {
+            format!(" {}", l) // espacio en la primera línea en la app
+        } else {
+            l.clone()
+        };
+        lines.push(Line::styled(display, Style::new().fg(t.accent).bold()));
     }
     lines.push(Line::styled("Aurelia, con una interfaz que no necesita manual".to_string(), Style::new().fg(t.accent2)));
     lines.push(Line::raw(""));
