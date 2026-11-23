@@ -231,7 +231,6 @@ impl App {
         } else {
             let title = format!("aurelia {}", args.join(" "));
             self.start_job(title, args, Tag::Normal);
-            self.focus_out = true;
         }
     }
 
@@ -646,7 +645,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
     fn goto(&mut self, s: usize) {
         self.screen = s.min(7);
         self.sidebar_cursor = self.screen;
-        self.focus_out = s >= 2; // auto-focus content on menu screens
+        self.focus_out = false; // always start on list/menu
         self.scroll = 0;
         self.list_state = ListState::default();
     }
