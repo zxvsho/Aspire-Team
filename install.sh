@@ -147,7 +147,23 @@ fi
 
 # ---------- Compilar Aspire-Team ----------
 step "Compilando Aspire-Team..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Detectar si estamos en el repo o necesitamos clonarlo
+if [[ -f "Cargo.toml" ]] && grep -q "aspire-team" Cargo.toml 2>/dev/null; then
+    SCRIPT_DIR="$(pwd)"
+elif [[ -n "${BASH_SOURCE[0]:-}" ]] && [[ -f "$(dirname "${BASH_SOURCE[0]}")/Cargo.toml" ]] 2>/dev/null; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    # Ejecutado via curl | bash: clonar el repo
+    info "Descargando código fuente..."
+    CLONE_DIR="$HOME/.local/share/aspire-team-src"
+    if [[ -d "$CLONE_DIR/.git" ]]; then
+        cd "$CLONE_DIR" && git pull origin main 2>/dev/null || true
+    else
+        mkdir -p "$(dirname "$CLONE_DIR")"
+        git clone https://github.com/zxvsho/Aspire-Team.git "$CLONE_DIR"
+    fi
+    SCRIPT_DIR="$CLONE_DIR"
+fi
 cd "$SCRIPT_DIR"
 info "Esto puede tardar unos minutos..."
 BUILD_OK=false
