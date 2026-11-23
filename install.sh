@@ -208,3 +208,4 @@ echo -e "  Ejecuta con: ${BOLD}aspire-team${RESET}"
 echo -e "  ${DIM}Variable opcional: ASPIRE_AURELIA_BIN para otro binario de aurelia.${RESET}"
 echo -e "  ${DIM}Si ya tienes Steam con sesión iniciada, Aurelia la reutiliza.${RESET}"
 echo ""
+# 1795451376
