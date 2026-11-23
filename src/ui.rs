@@ -141,17 +141,17 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
 }
 
 fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
-    let max_w = app.logo.iter().map(|l| l.chars().count()).max().unwrap_or(0) as u16;
-    let inner_w = a.width.saturating_sub(2);
-    let indent = inner_w.saturating_sub(max_w) / 2;
+    let max_w = app.logo.iter().map(|l| unicode_width::UnicodeWidthStr::width(l.trim_end())).max().unwrap_or(0);
     let mut lines: Vec<Line> = vec![Line::raw("")];
     for l in &app.logo {
-        lines.push(Line::styled(format!("{}{}", " ".repeat(indent as usize), l), Style::new().fg(t.accent).bold()));
+        let trimmed = l.trim_end();
+        let w = unicode_width::UnicodeWidthStr::width(trimmed);
+        let pad = max_w - w;
+        lines.push(Line::styled(format!("{}{}", trimmed, " ".repeat(pad)), Style::new().fg(t.accent).bold()));
     }
-    lines.push(Line::styled(format!("{}Aurelia, con una interfaz que no necesita manual", " ".repeat(indent as usize)), Style::new().fg(t.accent2)));
+    lines.push(Line::styled("Aurelia, con una interfaz que no necesita manual".to_string(), Style::new().fg(t.accent2)));
     lines.push(Line::raw(""));
     lines.push(Line::from(vec![
-        Span::raw(" ".repeat(indent as usize)),
         Span::styled(format!("{} ", app.games.len()), Style::new().fg(t.accent).bold()),
         Span::raw("juegos   "),
         Span::styled(format!("{} ", app.inst.len()), Style::new().fg(t.ok).bold()),
@@ -173,13 +173,13 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         ("T", "cambiar tema (incluye «Sistema»)"),
         ("?", "ayuda"),
     ] {
-        lines.push(Line::from(vec![Span::raw(" ".repeat(indent as usize)), Span::styled(format!("{k:>11}  "), Style::new().fg(t.accent)), Span::styled(d, Style::new().fg(t.fg))]));
+        lines.push(Line::from(vec![Span::styled(format!("{k:>11}  "), Style::new().fg(t.accent)), Span::styled(d, Style::new().fg(t.fg))]));
     }
     if !app.aurelia_ok {
         lines.push(Line::raw(""));
         lines.push(Line::styled("⚠ No encuentro `aurelia`. Instálalo: yay -S aurelia", Style::new().fg(t.err).bold()));
     }
-    f.render_widget(Paragraph::new(lines).alignment(Alignment::Left).block(blk("INICIO", t, true)), a);
+    f.render_widget(Paragraph::new(lines).alignment(Alignment::Center).block(blk("INICIO", t, true)), a);
 }
 
 fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
