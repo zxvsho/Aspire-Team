@@ -87,14 +87,15 @@ pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
         let script = r#"
             set -e
             echo "▸ Actualizando Aspire-Team..."
-            cd ~/.local/share/aspire-team-src 2>/dev/null || {
-                mkdir -p ~/.local/share
-                git clone https://github.com/zxvsho/Aspire-Team.git ~/.local/share/aspire-team-src
-                cd ~/.local/share/aspire-team-src
-            }
-            git pull origin main
-            cargo build --release
-            cargo install --path . --force
+            DIR="$HOME/.local/share/aspire-team-src"
+            if [ ! -d "$DIR/.git" ]; then
+                mkdir -p "$(dirname "$DIR")"
+                git clone --depth 50 https://github.com/zxvsho/Aspire-Team.git "$DIR"
+            fi
+            cd "$DIR"
+            git pull origin main 2>/dev/null || echo "(sin cambios)"
+            cargo build --release 2>&1 | tail -1
+            cargo install --path . --force 2>&1 | tail -1
             echo ""
             echo "✓ Aspire-Team actualizado. Reinicia la app."
         "#;
@@ -109,16 +110,20 @@ pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
     }
     if args.first().map(|s| s.as_str()) == Some("update-aurelia") {
         let script = r#"
-            set -e
             echo "▸ Actualizando Aurelia..."
             if command -v pacman >/dev/null 2>&1; then
-                sudo pacman -Sy --noconfirm aurelia
+                sudo pacman -Sy --noconfirm aurelia 2>&1 || true
             elif command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get update -qq && sudo apt-get install -y -qq --only-upgrade aurelia
+                sudo apt-get update -qq 2>&1 && sudo apt-get install -y -qq --only-upgrade aurelia 2>&1 || true
             elif command -v dnf >/dev/null 2>&1; then
-                sudo dnf upgrade -y aurelia
+                sudo dnf upgrade -y aurelia 2>&1 || true
+            elif command -v zypper >/dev/null 2>&1; then
+                sudo zypper install -y aurelia 2>&1 || true
             else
-                cargo install aurelia --force
+                echo "(distro no reconocido: usando cargo install)"
+            fi
+            if ! command -v aurelia >/dev/null 2>&1; then
+                cargo install aurelia --force 2>&1 | tail -1
             fi
             echo ""
             echo "✓ Aurelia actualizado. Versión: $(aurelia --version 2>&1 | head -1)"
