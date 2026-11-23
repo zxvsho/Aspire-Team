@@ -12,14 +12,14 @@ use std::{
 };
 
 pub const SCREENS: [(&str, &str); 8] = [
-    ("\u{f068}", "Inicio"),
-    ("\u{f069}", "Biblioteca"),
-    ("\u{f06a}", "Instalaciones"),
-    ("\u{f06b}", "Tienda"),
-    ("\u{f06c}", "Mods y parches"),
-    ("\u{f06d}", "Complementos"),
-    ("\u{f06e}", "Social"),
-    ("\u{f06f}", "Sistema"),
+    ("\u{f477}", "Inicio"),
+    ("\u{f02d}", "Biblioteca"),
+    ("\u{f078}", "Instalaciones"),
+    ("\u{f0d1}", "Tienda"),
+    ("\u{f033}", "Mods y parches"),
+    ("\u{f0d3}", "Complementos"),
+    ("\u{f0c0}", "Social"),
+    ("\u{f013}", "Sistema"),
 ];
 
 pub const LOGO: &str = r#" █████╗ ███████╗██████╗ ██╗██████╗ ███████╗
