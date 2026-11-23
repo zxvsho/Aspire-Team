@@ -192,11 +192,11 @@ if [[ "$UPDATE_MODE" == "true" ]] && [[ -d "$HOME/.local/share/aspire-team-src/.
 fi
 info "Esto puede tardar unos minutos..."
 BUILD_OK=false
-if cargo build --release 2>&1 | tail -3; then
+if cargo build --release; then
     BUILD_OK=true
 else
     warn "Primer intento falló, reintentando..."
-    if cargo build --release 2>&1 | tail -3; then
+    if cargo build --release; then
         BUILD_OK=true
     fi
 fi
