@@ -143,7 +143,7 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
 fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     let mut lines: Vec<Line> = vec![Line::raw("")];
     for l in &app.logo {
-        lines.push(Line::styled(format!("    {}", l), Style::new().fg(t.accent).bold()));
+        lines.push(Line::styled(l.clone(), Style::new().fg(t.accent).bold()));
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled("Aurelia, con una interfaz que no necesita manual", Style::new().fg(t.accent2)));
@@ -176,7 +176,7 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         lines.push(Line::raw(""));
         lines.push(Line::styled("⚠ No encuentro `aurelia`. Instálalo: yay -S aurelia", Style::new().fg(t.err).bold()));
     }
-    f.render_widget(Paragraph::new(lines).alignment(Alignment::Center).block(blk("INICIO", t, true)), a);
+    f.render_widget(Paragraph::new(lines).alignment(Alignment::Left).block(blk("INICIO", t, true)), a);
 }
 
 fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
