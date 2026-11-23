@@ -96,7 +96,7 @@ pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
             cargo build --release
             cargo install --path . --force
             echo ""
-            echo "✔ Aspire-Team actualizado. Reinicia la app."
+            echo "✓ Aspire-Team actualizado. Reinicia la app."
         "#;
         let status = std::process::Command::new("bash")
             .arg("-c")
@@ -121,7 +121,7 @@ pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
                 cargo install aurelia --force
             fi
             echo ""
-            echo "✔ Aurelia actualizado. Versión: $(aurelia --version 2>&1 | head -1)"
+            echo "✓ Aurelia actualizado. Versión: $(aurelia --version 2>&1 | head -1)"
         "#;
         let status = std::process::Command::new("bash")
             .arg("-c")

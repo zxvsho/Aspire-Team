@@ -4,6 +4,7 @@ use crate::{
     backend::flatten,
     theme::{Theme, THEMES},
 };
+use image::GenericImageView;
 use ratatui::{prelude::*, widgets::*};
 use serde_json::Value;
 
@@ -104,7 +105,7 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
     match app.cur.and_then(|i| app.jobs.get(i)) {
         None => lines.push(Line::styled("Elige una acción y pulsa Enter. Aquí verás el resultado.", Style::new().fg(t.dim))),
         Some(j) => {
-            let icon = if !j.done { SPIN[app.tick / 2 % 8] } else if j.code == Some(0) { "✔" } else { "✘" };
+            let icon = if !j.done { SPIN[app.tick / 2 % 8] } else if j.code == Some(0) { "✓" } else { "✗" };
             title = format!("{icon} {}", j.title);
             if !j.done && !j.progress.is_empty() {
                 lines.push(Line::styled(format!("▶ {}", j.progress), Style::new().fg(t.ok).bold()));
@@ -211,7 +212,7 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
     let table = Table::new(rows, [Constraint::Length(2), Constraint::Min(10), Constraint::Length(9)])
         .block(blk(&title, t, !app.focus_out))
         .row_highlight_style(sel_style(t))
-        .highlight_symbol("▍");
+        .highlight_symbol("▸");
     f.render_stateful_widget(table, cols[0], &mut app.lib_state);
     if idx.is_empty() {
         let inner = cols[0].inner(Margin::new(2, 2));
@@ -221,10 +222,40 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
     if app.show_job_out && app.cur.is_some() {
         draw_output(f, cols[1], app, t, app.focus_out);
     } else if let Some(g) = app.selected_game() {
+        // Render image as half-blocks if available (top of detail panel)
+        let img_rows = if let Some(img) = &app.game_image {
+            let img_w = (cols[1].width.saturating_sub(2)).min(20) as u32;
+            let cell_h = 6u32;
+            let img_h = cell_h * 2;
+            let resized = img.resize(img_w, img_h, image::imageops::FilterType::Nearest);
+            let rgba = resized.to_rgba8();
+            let (w, h) = resized.dimensions();
+            let mut y = cols[1].y + 1;
+            for row in (0..h).step_by(2) {
+                if y >= cols[1].y + 1 + cell_h as u16 { break; }
+                let mut line_spans = vec![Span::raw("")];
+                for x in 0..w {
+                    let top = rgba.get_pixel(x, row);
+                    let bot = if row + 1 < h { rgba.get_pixel(x, row + 1) } else { top };
+                    let top_color = Color::Rgb(top[0], top[1], top[2]);
+                    let bot_color = Color::Rgb(bot[0], bot[1], bot[2]);
+                    line_spans.push(Span::styled("▀", Style::new().fg(top_color).bg(bot_color)));
+                }
+                let line = Line::from(line_spans);
+                f.render_widget(Paragraph::new(line), Rect { x: cols[1].x + 1, y, width: cols[1].width.saturating_sub(2), height: 1 });
+                y += 1;
+            }
+            cell_h as u16 + 1
+        } else {
+            0
+        };
         let mut lines = vec![];
+        // Add empty lines to skip the image area
+        for _ in 0..img_rows {
+            lines.push(Line::raw(""));
+        }
         lines.push(Line::from(vec![Span::styled(g.name.clone(), Style::new().fg(t.accent).bold()), Span::styled(format!("  {}", g.id), Style::new().fg(t.dim))]));
         lines.push(Line::raw(""));
-        // Resumen organizado
         let raw = &g.raw;
         let kv = |key: &str, val: String| Line::from(vec![Span::styled(format!("{:<20}", key), Style::new().fg(t.accent2).bold()), Span::styled(val, Style::new().fg(t.fg))]);
         if let Some(v) = raw.get("is_installed").and_then(|x| x.as_bool()) {
@@ -246,9 +277,6 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
         }
         if let Some(v) = raw.get("active_branch").and_then(|x| x.as_str()) {
             lines.push(kv("Rama", v.to_string()));
-        }
-        if let Some(v) = raw.get("assets").and_then(|x| x.get("capsule")).and_then(|x| x.as_str()) {
-            lines.push(kv("Portada", v.to_string()));
         }
         lines.push(Line::raw(""));
         lines.push(Line::styled("── completo ──", Style::new().fg(t.dim)));
@@ -281,7 +309,7 @@ fn menu_screen(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
         })
         .collect();
     app.list_state.select(Some(app.cursor[app.screen].min(acts.len().saturating_sub(1))));
-    let list = List::new(items).block(blk(SCREENS[app.screen].1, t, !app.focus_out)).highlight_style(sel_style(t)).highlight_symbol("▍");
+    let list = List::new(items).block(blk(SCREENS[app.screen].1, t, !app.focus_out)).highlight_style(sel_style(t)).highlight_symbol("▸");
     f.render_stateful_widget(list, cols[0], &mut app.list_state);
     draw_output(f, cols[1], app, t, app.focus_out);
 }
@@ -294,8 +322,8 @@ fn jobs_panel(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         .rev()
         .filter(|(_, j)| j.tag == Tag::Normal)
         .map(|(i, j)| {
-            let (icon, c) = if !j.done { (SPIN[app.tick / 2 % 8], t.warn) } else if j.code == Some(0) { ("✔", t.ok) } else { ("✘", t.err) };
-            let mark = if app.cur == Some(i) { "▍" } else { " " };
+            let (icon, c) = if !j.done { (SPIN[app.tick / 2 % 8], t.warn) } else if j.code == Some(0) { ("✓", t.ok) } else { ("✗", t.err) };
+            let mark = if app.cur == Some(i) { "▸" } else { " " };
             ListItem::new(Line::from(vec![
                 Span::styled(mark, Style::new().fg(t.accent)),
                 Span::styled(format!("{icon} "), Style::new().fg(c)),
@@ -386,7 +414,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
             fill_bg(f, r, t);
             let items: Vec<ListItem> = GAME_ACTS.iter().map(|x| ListItem::new(format!("{}{}", x.label, if x.ask.is_some() { "…" } else { "" }))).collect();
             app.ov_state.select(Some(*c));
-            let list = List::new(items).block(blk(&name, t, true)).highlight_style(sel_style(t)).highlight_symbol("▍");
+            let list = List::new(items).block(blk(&name, t, true)).highlight_style(sel_style(t)).highlight_symbol("▸");
             f.render_stateful_widget(list, r, &mut app.ov_state);
         }
         Overlay::Prompt(p) => {
@@ -412,7 +440,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                     format!("◂ {} ▸", row.opts[row.idx])
                 };
                 let st = if sel { sel_style(t) } else { Style::new().fg(t.fg) };
-                lines.push(Line::from(vec![Span::styled(format!("{} {:<20}", if sel { "▍" } else { " " }, row.label), st), Span::styled(val, st)]));
+                lines.push(Line::from(vec![Span::styled(format!("{} {:<20}", if sel { "▸" } else { " " }, row.label), st), Span::styled(val, st)]));
             }
             lines.push(Line::raw(""));
             lines.push(Line::styled(l.rows[l.cursor].hint, Style::new().fg(t.dim)));
@@ -429,7 +457,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 .map(|(i, th)| {
                     let sel = i == *cursor;
                     Line::from(vec![
-                        Span::styled(if sel { "▍" } else { " " }, Style::new().fg(t.accent)),
+                        Span::styled(if sel { "▸" } else { " " }, Style::new().fg(t.accent)),
                         Span::styled(format!(" {:<17}", th.name), if sel { sel_style(t) } else { Style::new().fg(t.fg) }),
                         Span::styled("██", Style::new().fg(th.accent)),
                         Span::styled("██", Style::new().fg(th.accent2)),

@@ -3,6 +3,7 @@ use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     widgets::{ListState, TableState},
 };
+use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -12,7 +13,7 @@ use std::{
 };
 
 pub const SCREENS: [(&str, &str); 8] = [
-    ("⌂", "Inicio"),
+    ("◆", "Inicio"),
     ("▣", "Biblioteca"),
     ("⬇", "Instalaciones"),
     ("★", "Tienda"),
@@ -110,6 +111,11 @@ pub struct App {
     pub logo: Vec<String>,
     pub aurelia_ok: bool,
     pub proton_versions: Vec<String>,
+    pub game_image: Option<DynamicImage>,
+    pub image_loading: bool,
+    pub image_tx: Sender<Option<DynamicImage>>,
+    pub image_rx: Receiver<Option<DynamicImage>>,
+    pub current_image_url: Option<String>,
     pub count: Option<usize>,
     pub g_pending: bool,
     pub last_search: String,
@@ -119,6 +125,7 @@ pub struct App {
 impl App {
     pub fn new() -> Self {
         let (tx, rx) = channel();
+        let (image_tx, image_rx) = channel();
         let cfg: Cfg = std::fs::read_to_string(cfg_dir().join("config.toml")).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
         let logo_txt = std::fs::read_to_string(cfg_dir().join("logo.txt")).unwrap_or_else(|_| LOGO.to_string());
         let mut app = App {
@@ -153,6 +160,11 @@ impl App {
             logo: logo_txt.lines().map(|s| s.to_string()).collect(),
             aurelia_ok: true,
             proton_versions: vec![],
+            game_image: None,
+            image_loading: false,
+            image_tx,
+            image_rx,
+            current_image_url: None,
             count: None,
             g_pending: false,
             last_search: String::new(),
@@ -240,6 +252,44 @@ impl App {
     }
 
     pub fn pump(&mut self) {
+        // Check for image results
+        while let Ok(img) = self.image_rx.try_recv() {
+            self.game_image = img;
+            self.image_loading = false;
+        }
+        // Download image if game changed
+        if let Some(g) = self.selected_game() {
+            let url = g.raw.get("assets").and_then(|x| x.get("capsule")).and_then(|x| x.as_str()).map(|s| s.to_string());
+            if url != self.current_image_url && !self.image_loading {
+                self.current_image_url = url.clone();
+                self.game_image = None;
+                if let Some(url) = url {
+                    self.image_loading = true;
+                    let tx = self.image_tx.clone();
+                    std::thread::spawn(move || {
+                        // Download image to temp file
+                        let tmp_path = std::env::temp_dir().join("aspire-team-cover.jpg");
+                        let ok = std::process::Command::new("curl")
+                            .args(["-fsSL", "-o", tmp_path.to_str().unwrap_or(""), &url])
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false);
+                        if !ok {
+                            // Try wget
+                            let _ = std::process::Command::new("wget")
+                                .args(["-q", "-O", tmp_path.to_str().unwrap_or(""), &url])
+                                .status();
+                        }
+                        // Decode and create protocol
+                        let result = (|| -> Option<DynamicImage> {
+                            let img = image::ImageReader::open(&tmp_path).ok()?.decode().ok()?;
+                            Some(img)
+                        })();
+                        let _ = tx.send(result);
+                    });
+                }
+            }
+        }
         while let Ok(m) = self.rx.try_recv() {
             match m {
                 Msg::Line { job, err, text } => {
@@ -312,7 +362,7 @@ impl App {
                         }
                         Tag::Normal => {
                             let ok = code == Some(0);
-                            self.msg = format!("{} {}", if ok { "✔" } else { "✘" }, self.jobs[job].title);
+                            self.msg = format!("{} {}", if ok { "✓" } else { "✗" }, self.jobs[job].title);
                             if ok && ["install", "uninstall", "update", "move", "verify"].contains(&first.as_str()) {
                                 self.reload_installed();
                             }
@@ -708,6 +758,13 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
             KeyCode::Char('g') => { self.g_pending = true; return; }
             KeyCode::Char(c @ '1'..='8') => { self.goto(c as usize - '1' as usize); return; }
+            KeyCode::Char('n') => {
+                if !self.focus_out {
+                    self.activate();
+                }
+                self.focus_out = true;
+                return;
+            }
             KeyCode::Char('v') => { self.raw = !self.raw; return; }
             KeyCode::Char('[') => { self.cycle_job(-1); return; }
             KeyCode::Char(']') => { self.cycle_job(1); return; }
@@ -767,12 +824,6 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             }
             KeyCode::Char('h') | KeyCode::Left => self.focus_out = false,
             KeyCode::Char('l') | KeyCode::Right => self.focus_out = true,
-            KeyCode::Char('n') => {
-                if !self.focus_out {
-                    self.activate();
-                }
-                self.focus_out = true;
-            }
             KeyCode::Char('v') => self.raw = !self.raw,
             KeyCode::Char('N') => self.search_next(-1),
             KeyCode::Char('r') => {

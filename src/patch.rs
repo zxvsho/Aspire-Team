@@ -45,7 +45,7 @@ pub fn apply(src: &Path, dst: &Path, log: &dyn Fn(String)) -> Result<String> {
         }
         fs::create_dir_all(target.parent().unwrap())?;
         fs::copy(f, &target).with_context(|| format!("copiando {}", rel.display()))?;
-        log(format!("✔ {}", rel.display()));
+        log(format!("✓ {}", rel.display()));
     }
     fs::write(bk.join("added.txt"), added.join("\n"))?;
     Ok(format!(
