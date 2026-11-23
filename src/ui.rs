@@ -73,11 +73,11 @@ fn tabs(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         } else if active {
             Style::new().fg(t.accent).bold()
         } else {
-            Style::new().fg(t.dim)
+            Style::new().fg(t.fg)
         };
         spans.push(Span::styled(format!(" {} {} ", ic, name), style));
         if i < SCREENS.len() - 1 {
-            spans.push(Span::styled("│", Style::new().fg(t.dim)));
+            spans.push(Span::styled("│", Style::new().fg(t.fg)));
         }
     }
     f.render_widget(Paragraph::new(Line::from(spans)).alignment(Alignment::Center).block(blk("MENÚ", t, !app.focus_out)), a);
@@ -144,7 +144,7 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     let mut lines: Vec<Line> = vec![Line::raw("")];
     for (idx, l) in app.logo.iter().enumerate() {
         let display = if idx == 0 {
-            format!(" {}", l) // espacio en la primera línea en la app
+            l.clone() // logo tal como está en el archivo
         } else {
             l.clone()
         };
