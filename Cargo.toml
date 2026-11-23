@@ -1,6 +1,6 @@
 [package]
 name = "aspire-team"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "TUI retro (ratatui) para Aurelia, el cliente de Steam por línea de comandos"
 license = "GPL-3.0-or-later"
