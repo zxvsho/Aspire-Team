@@ -4,7 +4,6 @@ use crate::{
     backend::flatten,
     theme::{Theme, THEMES},
 };
-use image::GenericImageView;
 use ratatui::{prelude::*, widgets::*};
 use serde_json::Value;
 
@@ -222,38 +221,7 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
     if app.show_job_out && app.cur.is_some() {
         draw_output(f, cols[1], app, t, app.focus_out);
     } else if let Some(g) = app.selected_game() {
-        // Render image as half-blocks if available (top of detail panel)
-        let img_rows = if let Some(img) = &app.game_image {
-            let img_w = (cols[1].width.saturating_sub(2)).min(20) as u32;
-            let cell_h = 6u32;
-            let img_h = cell_h * 2;
-            let resized = img.resize(img_w, img_h, image::imageops::FilterType::Nearest);
-            let rgba = resized.to_rgba8();
-            let (w, h) = resized.dimensions();
-            let mut y = cols[1].y + 1;
-            for row in (0..h).step_by(2) {
-                if y >= cols[1].y + 1 + cell_h as u16 { break; }
-                let mut line_spans = vec![Span::raw("")];
-                for x in 0..w {
-                    let top = rgba.get_pixel(x, row);
-                    let bot = if row + 1 < h { rgba.get_pixel(x, row + 1) } else { top };
-                    let top_color = Color::Rgb(top[0], top[1], top[2]);
-                    let bot_color = Color::Rgb(bot[0], bot[1], bot[2]);
-                    line_spans.push(Span::styled("▀", Style::new().fg(top_color).bg(bot_color)));
-                }
-                let line = Line::from(line_spans);
-                f.render_widget(Paragraph::new(line), Rect { x: cols[1].x + 1, y, width: cols[1].width.saturating_sub(2), height: 1 });
-                y += 1;
-            }
-            cell_h as u16 + 1
-        } else {
-            0
-        };
         let mut lines = vec![];
-        // Add empty lines to skip the image area
-        for _ in 0..img_rows {
-            lines.push(Line::raw(""));
-        }
         lines.push(Line::from(vec![Span::styled(g.name.clone(), Style::new().fg(t.accent).bold()), Span::styled(format!("  {}", g.id), Style::new().fg(t.dim))]));
         lines.push(Line::raw(""));
         let raw = &g.raw;
@@ -277,6 +245,9 @@ fn library(f: &mut Frame, a: Rect, app: &mut App, t: &Theme) {
         }
         if let Some(v) = raw.get("active_branch").and_then(|x| x.as_str()) {
             lines.push(kv("Rama", v.to_string()));
+        }
+        if let Some(v) = raw.get("assets").and_then(|x| x.get("capsule")).and_then(|x| x.as_str()) {
+            lines.push(kv("Portada", v.to_string()));
         }
         lines.push(Line::raw(""));
         lines.push(Line::styled("── completo ──", Style::new().fg(t.dim)));
