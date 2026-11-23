@@ -729,7 +729,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 KeyCode::Enter => self.goto(self.sidebar_cursor),
                 KeyCode::Char('l') | KeyCode::Right => {
                     self.goto(self.sidebar_cursor);
-                    self.focus_out = true;
+                    // focus stays on left panel (options) by default
                 }
                 KeyCode::Char('h') | KeyCode::Left => {}
                 _ => {}
