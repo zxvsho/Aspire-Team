@@ -1,6 +1,7 @@
-use crate::{actions::*, backend::*, patch, theme};
+use crate::{actions::*, backend::*, patch, theme, ui::centered};
 use ratatui::{
     crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    layout::Rect,
     widgets::{ListState, TableState},
 };
 use serde::{Deserialize, Serialize};
@@ -519,6 +520,33 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 if tab_width > 0 {
                     let idx = (m.column / tab_width).min(7) as usize;
                     self.goto(idx);
+                }
+                return;
+            }
+            // Overlays con lista (Links, ProtonPick): clic para seleccionar
+            if matches!(self.overlay, Overlay::Links { .. }) {
+                let area = Rect::new(0, 0, _w, h);
+                let n = self.urls.len();
+                let r = centered(area, 62.min(area.width), (n + 3) as u16);
+                let idx = m.row.saturating_sub(r.y + 1) as usize;
+                if idx < n {
+                    let u = self.urls[idx].clone();
+                    let _ = std::process::Command::new("xdg-open").arg(u).spawn();
+                }
+                self.overlay = Overlay::None;
+                return;
+            }
+            if matches!(self.overlay, Overlay::ProtonPick { .. }) {
+                let ov = std::mem::replace(&mut self.overlay, Overlay::None);
+                if let Overlay::ProtonPick { act, versions, .. } = ov {
+                    let area = Rect::new(0, 0, _w, h);
+                    let n = versions.len();
+                    let r = centered(area, 64.min(area.width), (n + 4) as u16);
+                    let idx = m.row.saturating_sub(r.y + 1) as usize;
+                    if idx < n {
+                        let v = versions[idx].clone();
+                        self.exec(act, None, v);
+                    }
                 }
                 return;
             }

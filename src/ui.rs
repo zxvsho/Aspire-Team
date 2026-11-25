@@ -9,7 +9,7 @@ use serde_json::Value;
 
 const SPIN: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
-fn centered(a: Rect, w: u16, h: u16) -> Rect {
+pub(crate) fn centered(a: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(a.width);
     let h = h.min(a.height);
     Rect { x: a.x + (a.width - w) / 2, y: a.y + (a.height - h) / 2, width: w, height: h }
