@@ -375,7 +375,17 @@ impl App {
                         }
                         Tag::Normal => {
                             let ok = code == Some(0);
-                            self.msg = format!("{} {}", if ok { "✓" } else { "✗" }, self.jobs[job].title);
+                            let title = self.jobs[job].title.clone();
+                            let has_out = self.jobs[job]
+                                .lines
+                                .iter()
+                                .any(|(_, l)| !l.trim().is_empty())
+                                || self.jobs[job].result.is_some();
+                            self.msg = if ok && !has_out {
+                                format!("✓ {title} — sin resultados")
+                            } else {
+                                format!("{} {}", if ok { "✓" } else { "✗" }, title)
+                            };
                             if ok && ["install", "uninstall", "update", "move", "verify"].contains(&first.as_str()) {
                                 self.reload_installed();
                             }
