@@ -82,35 +82,6 @@ where
 
 /// Comandos que piden teclado (login, chat…): se ejecutan con la terminal completa.
 pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
-    if args.first().map(|s| s.as_str()) == Some("update-aurelia") {
-        let script = r#"
-            echo "▸ Actualizando Aurelia..."
-            if command -v pacman >/dev/null 2>&1; then
-                sudo pacman -Sy --noconfirm aurelia 2>&1 || true
-            elif command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get update -qq 2>&1 && sudo apt-get install -y -qq --only-upgrade aurelia 2>&1 || true
-            elif command -v dnf >/dev/null 2>&1; then
-                sudo dnf upgrade -y aurelia 2>&1 || true
-            elif command -v zypper >/dev/null 2>&1; then
-                sudo zypper install -y aurelia 2>&1 || true
-            else
-                echo "(distro no reconocido: usando cargo install)"
-            fi
-            if ! command -v aurelia >/dev/null 2>&1; then
-                cargo install aurelia --force 2>&1 | tail -1
-            fi
-            echo ""
-            echo "✓ Aurelia actualizado. Versión: $(aurelia --version 2>&1 | head -1)"
-        "#;
-        let status = std::process::Command::new("bash")
-            .arg("-c")
-            .arg(script)
-            .status()?;
-        println!("\n[actualización terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
-        let mut s = String::new();
-        std::io::stdin().read_line(&mut s)?;
-        return Ok(());
-    }
     let status = Command::new(bin()).args(args).status()?;
     println!("\n[aurelia terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
     let mut s = String::new();
@@ -122,7 +93,7 @@ pub fn is_interactive(args: &[String]) -> bool {
     let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     matches!(
         a.as_slice(),
-        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..] | ["update-aurelia"]
+        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..]
     )
 }
 
