@@ -118,10 +118,24 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
                     }
                 }
                 _ => {
-                    for (e, l) in j.lines.iter().rev().take(2000).collect::<Vec<_>>().into_iter().rev() {
-                        lines.push(Line::styled(l.clone(), Style::new().fg(if *e { t.warn } else { t.fg })));
+                    let raw: Vec<(bool, String)> = j.lines.iter().rev().take(2000).cloned().collect::<Vec<_>>().into_iter().rev().collect();
+                    let mut last_blank = true;
+                    for (e, l) in raw {
+                        let txt = l.trim_end().to_string();
+                        if txt.trim().is_empty() {
+                            if !last_blank {
+                                lines.push(Line::raw(""));
+                            }
+                            last_blank = true;
+                        } else {
+                            lines.push(Line::styled(txt, Style::new().fg(if e { t.warn } else { t.fg })));
+                            last_blank = false;
+                        }
                     }
                 }
+            }
+            if j.done && !lines.is_empty() {
+                lines.push(Line::styled(format!("código: {:?}", j.code), Style::new().fg(t.dim)));
             }
             if j.done && lines.is_empty() {
                 lines.push(Line::styled(format!("(sin salida) código {:?}", j.code), Style::new().fg(t.dim)));
@@ -297,6 +311,7 @@ fn jobs_panel(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
                 Span::styled(format!("{icon} "), Style::new().fg(c)),
                 Span::raw(j.title.clone()),
                 Span::styled(if j.progress.is_empty() { String::new() } else { format!("   {}", j.progress) }, Style::new().fg(t.dim)),
+                Span::styled(if j.done { format!("   código {:?}", j.code) } else { String::new() }, Style::new().fg(t.dim)),
             ]))
         })
         .collect();
