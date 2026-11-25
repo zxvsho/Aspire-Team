@@ -594,7 +594,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 self.overlay = Overlay::Launch(l);
                 return;
             }
-            KeyCode::Char('r') | KeyCode::Enter => {
+            KeyCode::Char('n') | KeyCode::Char('r') | KeyCode::Enter => {
                 let args = l.args();
                 self.run_args(args);
                 return;
@@ -611,7 +611,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 self.theme = orig;
                 return;
             }
-            KeyCode::Enter => {
+            KeyCode::Enter | KeyCode::Char('n') => {
                 self.save_cfg();
                 return;
             }
@@ -711,7 +711,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
             KeyCode::Char('g') => { self.g_pending = true; return; }
             KeyCode::Char(c @ '1'..='8') => { self.goto(c as usize - '1' as usize); return; }
-            KeyCode::Char('n') => {
+            KeyCode::Char('n') if self.screen != 0 => {
                 self.activate();
                 return;
             }
@@ -730,7 +730,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 KeyCode::Char('k') | KeyCode::Up => self.sidebar_cursor = (self.sidebar_cursor + 7) % 8,
                 KeyCode::Char('g') => self.sidebar_cursor = 0,
                 KeyCode::Char('G') => self.sidebar_cursor = 7,
-                KeyCode::Enter => self.goto(self.sidebar_cursor),
+                KeyCode::Enter | KeyCode::Char('n') => self.goto(self.sidebar_cursor),
                 KeyCode::Char('l') | KeyCode::Right => {
                     self.goto(self.sidebar_cursor);
                     // focus stays on left panel (options) by default

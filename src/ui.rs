@@ -33,7 +33,7 @@ fn blk(title: &str, t: &Theme, focus: bool) -> Block<'static> {
 }
 
 fn sel_style(t: &Theme) -> Style {
-    Style::new().bg(t.sel).fg(t.accent).add_modifier(Modifier::BOLD)
+    Style::new().bg(t.sel).fg(t.seltext).add_modifier(Modifier::BOLD)
 }
 
 pub fn draw(f: &mut Frame, app: &mut App) {
@@ -331,7 +331,7 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     };
     let mut left = vec![
         Span::styled(format!(" {mode} "), Style::new().bg(mode_bg).fg(Color::Black).bold()),
-        Span::styled(format!(" {} ", SCREENS[app.screen].1), Style::new().bg(t.sel).fg(t.accent)),
+        Span::styled(format!(" {} ", SCREENS[app.screen].1), Style::new().bg(t.sel).fg(t.seltext)),
     ];
     if let Some(c) = app.count {
         left.push(Span::styled(format!(" {c}"), Style::new().fg(t.warn).bold()));
@@ -346,9 +346,9 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     }
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
-        1 => "j/k mover  h/l foco  Enter seleccionar  / filtrar  p jugar  o opciones  ? ayuda",
-        0 => "j/k sidebar  Enter seleccionar  l entrar  Space líder  T tema  ? ayuda  Ctrl-c salir",
-        _ => "j/k mover  Enter ejecutar  h/l foco  v crudo  [ ] trabajos  : comando",
+        1 => "j/k mover  h/l foco  Enter o n seleccionar  Tab siguiente  / filtrar  p jugar  o opciones  ? ayuda",
+        0 => "j/k sidebar  Enter o n seleccionar  l entrar  Space líder  T tema  Tab siguiente  ? ayuda  Ctrl-c salir",
+        _ => "j/k mover  Enter o n ejecutar  Tab siguiente  h/l foco  v crudo  [ ] trabajos  : comando",
     };
     let bottom = Line::from(vec![
         Span::styled("ASPIRE-TEAM", Style::new().fg(t.dim)),
