@@ -472,7 +472,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
         }
         Overlay::ProtonPick { act, versions, cursor } => {
             let n = versions.len();
-            let r = centered(area, 64.min(area.width), (n + 3) as u16);
+            let r = centered(area, 64.min(area.width), (n + 4) as u16);
             f.render_widget(Clear, r);
             fill_bg(f, r, t);
             let mut lines: Vec<Line> = versions
@@ -486,6 +486,11 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                     ])
                 })
                 .collect();
+            let sel_name = versions.get(*cursor).cloned().unwrap_or_default();
+            lines.push(Line::styled(
+                format!("aurelia {}", act.args.replace("{}", &sel_name)),
+                Style::new().fg(t.fg),
+            ));
             lines.push(Line::styled(
                 if n > 0 { "j/k mueve · Enter elige · Esc cierra" } else { "(no hay versiones disponibles)" },
                 Style::new().fg(t.accent2),

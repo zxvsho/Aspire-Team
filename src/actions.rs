@@ -116,22 +116,22 @@ const INSTALLS: &[Act] = &[
 ];
 
 const STORE: &[Act] = &[
-    q("Buscar juego", "search {}", "Título", "Busca AppIDs por título"),
+    q("Buscar juego", "search {}", "Título (muestra AppIDs)", "Busca AppIDs por título"),
     a("Ofertas", "deals", "Más vendidos con descuento"),
     a("Eventos y rebajas", "events", "Eventos de la tienda"),
-    q("Información", "info {}", "AppID", "Detalles del juego"),
-    q("Información extendida", "info {} --extended", "AppID", "Requisitos, géneros…"),
-    q("Precio por región", "price {} --compare US,DE,JP", "AppID", "Compara regiones"),
-    q("Similares", "similar {}", "AppID", "Juegos parecidos"),
-    q("Jugadores ahora", "players {}", "AppID", "Jugadores conectados"),
-    q("Noticias", "news {}", "AppID", "Anuncios recientes"),
-    q("Reseñas", "reviews {}", "AppID", "Reseñas de usuarios"),
-    q("Reseñas negativas", "reviews {} -t negative", "AppID", "Solo negativas"),
-    q("DLC", "dlc {}", "AppID", "DLC y propiedad"),
-    q("Logros", "achievements {}", "AppID", "Tus logros"),
-    q("Verificar DRM/propiedad", "drm {}", "AppID", "Tickets sin cliente Steam"),
-    q("Portada (caché)", "image {}", "AppID", "Descarga arte y muestra la ruta"),
-    q("Imágenes y trailers", "image {} --list --probe", "AppID", "URLs de arte, capturas y trailers"),
+    q("Información", "info {}", "AppID de Steam (número)", "Detalles del juego"),
+    q("Información extendida", "info {} --extended", "AppID de Steam (número)", "Requisitos, géneros…"),
+    q("Precio por región", "price {} --compare US,DE,JP", "AppID de Steam (número)", "Compara regiones"),
+    q("Similares", "similar {}", "AppID de Steam (número)", "Juegos parecidos"),
+    q("Jugadores ahora", "players {}", "AppID de Steam (número)", "Jugadores conectados"),
+    q("Noticias", "news {}", "AppID de Steam (número)", "Anuncios recientes"),
+    q("Reseñas", "reviews {}", "AppID de Steam (número)", "Reseñas de usuarios"),
+    q("Reseñas negativas", "reviews {} -t negative", "AppID de Steam (número)", "Solo negativas"),
+    q("DLC", "dlc {}", "AppID de Steam (número)", "DLC y propiedad"),
+    q("Logros", "achievements {}", "AppID de Steam (número)", "Tus logros"),
+    q("Verificar DRM/propiedad", "drm {}", "AppID de Steam (número)", "Tickets sin cliente Steam"),
+    q("Portada (caché)", "image {}", "AppID de Steam (número)", "Descarga arte y muestra la ruta"),
+    q("Imágenes y trailers", "image {} --list --probe", "AppID de Steam (número)", "URLs de arte, capturas y trailers"),
 ];
 
 const MODS: &[Act] = &[

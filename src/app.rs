@@ -113,6 +113,7 @@ pub struct App {
     pub aurelia_ok: bool,
     pub proton_versions: Vec<String>,
     pub proton_list: Vec<String>,
+    pub proton_installed: Vec<String>,
     pub count: Option<usize>,
     pub g_pending: bool,
     pub last_search: String,
@@ -157,6 +158,7 @@ impl App {
             aurelia_ok: true,
             proton_versions: vec![],
             proton_list: vec![],
+            proton_installed: vec![],
             count: None,
             g_pending: false,
             last_search: String::new(),
@@ -332,6 +334,15 @@ impl App {
                                         self.proton_list = names;
                                     }
                                 }
+                                if let Some(inst) = v.get("installed").and_then(|x| x.as_array()) {
+                                    let names: Vec<String> = inst
+                                        .iter()
+                                        .filter_map(|x| x.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                                        .collect();
+                                    if !names.is_empty() {
+                                        self.proton_installed = names;
+                                    }
+                                }
                             }
                         }
                         Tag::Normal => {
@@ -378,7 +389,15 @@ impl App {
             return;
         }
         if act.mode == Mode::Pick {
-            let mut versions = self.proton_list.clone();
+            let mut versions = if act.args.starts_with("proton uninstall") {
+                if !self.proton_installed.is_empty() {
+                    self.proton_installed.clone()
+                } else {
+                    self.proton_versions.clone()
+                }
+            } else {
+                self.proton_list.clone()
+            };
             if versions.is_empty() {
                 versions = self.proton_versions.clone();
             }
