@@ -21,7 +21,7 @@ pub const THEMES: &[Theme] = &[
     // Retro82: paleta retro estilo viejo TUI
     Theme { name: "Retro82", bg: C(20, 15, 30), fg: C(255, 210, 150), dim: C(180, 150, 110), accent: C(255, 160, 100), accent2: C(255, 200, 150), ok: C(180, 220, 150), warn: C(255, 210, 80), err: C(255, 90, 70), sel: C(80, 50, 30), seltext: C(255, 160, 100), },
     // Terminal: usa la paleta ANSI de tu terminal (respeta tus colores)
-    Theme { name: "Terminal", bg: Color::Reset, fg: Color::Reset, dim: Color::White, accent: Color::Cyan, accent2: Color::Magenta, ok: Color::Green, warn: Color::Yellow, err: Color::Red, sel: Color::DarkGray, seltext: Color::Cyan, },
+    Theme { name: "Terminal", bg: Color::Reset, fg: Color::Reset, dim: Color::White, accent: Color::Cyan, accent2: Color::Magenta, ok: Color::Green, warn: Color::Yellow, err: Color::Red, sel: Color::DarkGray, seltext: Color::White, },
     // Sistema: lee ~/.config/theme-engine/colors.css/.rasi y construye la paleta
     Theme { name: "Sistema", bg: C(30, 30, 35), fg: C(230, 230, 235), dim: C(185, 185, 195), accent: C(120, 190, 240), accent2: C(160, 210, 255), ok: C(120, 210, 150), warn: C(255, 190, 80), err: C(255, 100, 80), sel: C(80, 130, 200), seltext: C(120, 190, 240), },
     // Everforest: verde oscuro y cálido
