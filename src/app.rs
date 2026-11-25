@@ -71,6 +71,7 @@ pub enum Overlay {
     Theme { cursor: usize, orig: usize },
     Help,
     ProtonPick { act: &'static Act, versions: Vec<String>, cursor: usize },
+    Links { cursor: usize },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -114,6 +115,7 @@ pub struct App {
     pub proton_versions: Vec<String>,
     pub proton_list: Vec<String>,
     pub proton_installed: Vec<String>,
+    pub urls: Vec<String>,
     pub count: Option<usize>,
     pub g_pending: bool,
     pub last_search: String,
@@ -159,6 +161,7 @@ impl App {
             proton_versions: vec![],
             proton_list: vec![],
             proton_installed: vec![],
+            urls: vec![],
             count: None,
             g_pending: false,
             last_search: String::new(),
@@ -252,10 +255,30 @@ impl App {
         self.jobs.iter().filter(|j| !j.done).count()
     }
 
+    fn push_urls(&mut self, text: &str) {
+        for w in text.split_whitespace() {
+            if !w.starts_with("http://") && !w.starts_with("https://") {
+                continue;
+            }
+            let mut u = w;
+            while let Some(last) = u.chars().last() {
+                if "),.';\"`]>".contains(last) {
+                    u = &u[..u.len() - last.len_utf8()];
+                } else {
+                    break;
+                }
+            }
+            if u.len() > 8 && self.urls.len() < 60 && !self.urls.iter().any(|x| x == u) {
+                self.urls.push(u.to_string());
+            }
+        }
+    }
+
     pub fn pump(&mut self) {
         while let Ok(m) = self.rx.try_recv() {
             match m {
                 Msg::Line { job, err, text } => {
+                    self.push_urls(&text);
                     if let Some(j) = self.jobs.get_mut(job) {
                         if !err {
                             if let Ok(v) = serde_json::from_str::<Value>(&text) {
@@ -527,6 +550,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             Overlay::Theme { cursor, orig } => self.key_theme(cursor, orig, k),
             Overlay::Help => {}
             Overlay::ProtonPick { act, versions, cursor } => self.key_proton_pick(act, versions, cursor, k),
+            Overlay::Links { cursor } => self.key_links(cursor, k),
         }
     }
 
@@ -676,6 +700,23 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
         self.overlay = Overlay::Theme { cursor: c, orig };
     }
 
+    fn key_links(&mut self, mut c: usize, k: KeyEvent) {
+        let n = self.urls.len();
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
+            KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
+            KeyCode::Enter if n > 0 => {
+                if let Some(u) = self.urls.get(c) {
+                    let _ = std::process::Command::new("xdg-open").arg(u).spawn();
+                }
+                return;
+            }
+            _ => {}
+        }
+        self.overlay = Overlay::Links { cursor: c };
+    }
+
     fn key_proton_pick(&mut self, act: &'static Act, versions: Vec<String>, mut c: usize, k: KeyEvent) {
         let n = versions.len();
         match k.code {
@@ -779,6 +820,12 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
         match k.code {
             KeyCode::Char(' ') => { self.leader = true; return; }
             KeyCode::Char('T') => { self.overlay = Overlay::Theme { cursor: self.theme, orig: self.theme }; return; }
+            KeyCode::Char('U') => {
+                if !self.urls.is_empty() {
+                    self.overlay = Overlay::Links { cursor: 0 };
+                }
+                return;
+            }
             KeyCode::Char('?') => { self.overlay = Overlay::Help; return; }
             KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
             KeyCode::Char('g') => { self.g_pending = true; return; }

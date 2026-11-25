@@ -346,9 +346,9 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     }
     f.render_widget(Paragraph::new(Line::from(left)).style(Style::new().bg(t.bg)), rows[0]);
     let hints = match app.screen {
-        1 => "j/k mover  h/l foco  Enter o n seleccionar  Tab siguiente  / filtrar  p jugar  o opciones  ? ayuda",
-        0 => "j/k sidebar  Enter o n seleccionar  l entrar  Space líder  T tema  Tab siguiente  ? ayuda  Ctrl-c salir",
-        _ => "j/k mover  Enter o n ejecutar  Tab siguiente  h/l foco  v crudo  [ ] trabajos  : comando",
+        1 => "j/k mover  h/l foco  Enter o n seleccionar  Tab siguiente  / filtrar  p jugar  o opciones  U urls  ? ayuda",
+        0 => "j/k sidebar  Enter o n seleccionar  l entrar  Space líder  T tema  Tab siguiente  U urls  ? ayuda  Ctrl-c salir",
+        _ => "j/k mover  Enter o n ejecutar  Tab siguiente  h/l foco  v crudo  [ ] trabajos  : comando  U urls",
     };
     let bottom = Line::from(vec![
         Span::styled("ASPIRE-TEAM", Style::new().fg(t.dim)),
@@ -455,6 +455,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 ("Enter o n", "Ejecutar acción (Biblioteca: menú)"),
                 ("Space", "Líder (which-key)"),
                 (":", "Comando libre de aurelia"),
+                ("U", "URLs: ver y abrir en el navegador"),
                 ("/ n N", "Biblioteca: filtrar · siguiente · anterior"),
                 ("p o I u K", "Jugar · opciones · instalar · actualizar · info"),
                 ("i", "Biblioteca: solo instalados"),
@@ -496,6 +497,29 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 Style::new().fg(t.accent2),
             ));
             f.render_widget(Paragraph::new(lines).block(blk(act.label, t, true)), r);
+        }
+        Overlay::Links { cursor } => {
+            let n = app.urls.len();
+            let r = centered(area, 62.min(area.width), (n + 3) as u16);
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let mut lines: Vec<Line> = app
+                .urls
+                .iter()
+                .enumerate()
+                .map(|(i, u)| {
+                    let sel = n > 0 && i == *cursor;
+                    Line::from(vec![
+                        Span::styled(if sel { "▸" } else { " " }, Style::new().fg(t.accent)),
+                        Span::styled(format!(" {u}"), if sel { sel_style(t) } else { Style::new().fg(t.fg) }),
+                    ])
+                })
+                .collect();
+            lines.push(Line::styled(
+                if n > 0 { "Enter abre en el navegador · j/k mueve · Esc cierra" } else { "(sin urls encontradas)" },
+                Style::new().fg(t.accent2),
+            ));
+            f.render_widget(Paragraph::new(lines).block(blk("URLs", t, true)), r);
         }
     }
 }
