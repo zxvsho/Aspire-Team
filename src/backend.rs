@@ -82,32 +82,6 @@ where
 
 /// Comandos que piden teclado (login, chat…): se ejecutan con la terminal completa.
 pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
-    if args.first().map(|s| s.as_str()) == Some("self-update") {
-        // Actualizar Aspire-Team desde GitHub
-        let script = r#"
-            set -e
-            echo "▸ Actualizando Aspire-Team..."
-            DIR="$HOME/.local/share/aspire-team-src"
-            if [ ! -d "$DIR/.git" ]; then
-                mkdir -p "$(dirname "$DIR")"
-                git clone --depth 50 https://github.com/zxvsho/Aspire-Team.git "$DIR"
-            fi
-            cd "$DIR"
-            git pull origin main 2>/dev/null || echo "(sin cambios)"
-            cargo build --release 2>&1 | tail -1
-            cargo install --path . --force 2>&1 | tail -1
-            echo ""
-            echo "✓ Aspire-Team actualizado. Reinicia la app."
-        "#;
-        let status = std::process::Command::new("bash")
-            .arg("-c")
-            .arg(script)
-            .status()?;
-        println!("\n[actualización terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
-        let mut s = String::new();
-        std::io::stdin().read_line(&mut s)?;
-        return Ok(());
-    }
     if args.first().map(|s| s.as_str()) == Some("update-aurelia") {
         let script = r#"
             echo "▸ Actualizando Aurelia..."
@@ -148,7 +122,7 @@ pub fn is_interactive(args: &[String]) -> bool {
     let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     matches!(
         a.as_slice(),
-        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..] | ["self-update"] | ["update-aurelia"]
+        ["login", ..] | ["chat", "open", ..] | ["steam-runtime", "install" | "login" | "repair", ..] | ["update-aurelia"]
     )
 }
 
