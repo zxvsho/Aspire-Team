@@ -246,8 +246,13 @@ impl App {
         if is_interactive(&args) {
             self.pending = Some(args);
         } else {
+            let mut jargs = args.clone();
+            // Sale estructurada (--json): la app muestra salidas organizadas con kv_lines.
+            if jargs.first().map(|s| s.as_str()) != Some("play") {
+                jargs.push("--json".into());
+            }
             let title = format!("aurelia {}", args.join(" "));
-            self.start_job(title, args, Tag::Normal);
+            self.start_job(title, jargs, Tag::Normal);
         }
     }
 
@@ -498,8 +503,8 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 self.overlay = Overlay::None;
                 return;
             }
-            // Tab bar (row 3): switch section by column
-            if m.row == 3 {
+            // Tab bar (rows 0-2): switch section by column
+            if m.row < 3 {
                 let tab_width = _w / 8;
                 if tab_width > 0 {
                     let idx = (m.column / tab_width).min(7) as usize;
