@@ -164,7 +164,7 @@ fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     for (k, d) in [
         ("Tab", "cambiar de sección"),
         ("j k", "navegar barra lateral · contenido: mover"),
-        ("Enter", "seleccionar sección"),
+        ("Enter o n", "seleccionar sección"),
         ("l", "entrar al contenido"),
         ("h", "volver a la barra lateral"),
         ("gg G", "inicio / fin de la barra"),
@@ -441,7 +441,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
         Overlay::Help => {
             let rows = [
                 ("j k", "Barra lateral: navegar secciones"),
-                ("Enter", "Seleccionar sección"),
+                ("Enter o n", "Seleccionar sección"),
                 ("l", "Entrar al contenido"),
                 ("h", "Volver a la barra lateral"),
                 ("gg G", "Inicio / fin de la barra"),
@@ -452,7 +452,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
                 ("gg G · 0 $", "Contenido: inicio / fin"),
                 ("Ctrl-d u · f b", "Media página / página completa"),
                 ("H M L", "Arriba / centro / abajo de la vista"),
-                ("Enter", "Ejecutar acción (Biblioteca: menú)"),
+                ("Enter o n", "Ejecutar acción (Biblioteca: menú)"),
                 ("Space", "Líder (which-key)"),
                 (":", "Comando libre de aurelia"),
                 ("/ n N", "Biblioteca: filtrar · siguiente · anterior"),
