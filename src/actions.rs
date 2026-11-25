@@ -234,6 +234,8 @@ const SYSTEM: &[Act] = &[
     a("Capacidades (JSON)", "capabilities", "Comandos, flags, errores y códigos"),
     a("Versión", "--version", "Versión de aurelia"),
     a("Ayuda de aurelia", "--help", "Lista de subcomandos"),
+    i("Actualizar Aspire-Team", "self-update", "Descarga y compila la última versión desde GitHub"),
+    i("Actualizar Aurelia", "update-aurelia", "Actualiza aurelia a la última versión disponible"),
 ];
 
 pub fn acts_for(screen: usize) -> &'static [Act] {
