@@ -470,5 +470,27 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
             let lines: Vec<Line> = rows.iter().map(|(k, d)| Line::from(vec![Span::styled(format!(" {k:<15}"), Style::new().fg(t.accent).bold()), Span::raw(*d)])).collect();
             f.render_widget(Paragraph::new(lines).block(blk("AYUDA · cualquier tecla cierra", t, true)), r);
         }
+        Overlay::ProtonPick { act, versions, cursor } => {
+            let n = versions.len();
+            let r = centered(area, 64.min(area.width), (n + 3) as u16);
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let mut lines: Vec<Line> = versions
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let sel = n > 0 && i == *cursor;
+                    Line::from(vec![
+                        Span::styled(if sel { "▸" } else { " " }, Style::new().fg(t.accent)),
+                        Span::styled(format!(" {v}"), if sel { sel_style(t) } else { Style::new().fg(t.fg) }),
+                    ])
+                })
+                .collect();
+            lines.push(Line::styled(
+                if n > 0 { "j/k mueve · Enter elige · Esc cierra" } else { "(no hay versiones disponibles)" },
+                Style::new().fg(t.accent2),
+            ));
+            f.render_widget(Paragraph::new(lines).block(blk(act.label, t, true)), r);
+        }
     }
 }

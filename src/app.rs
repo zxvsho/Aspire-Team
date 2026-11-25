@@ -35,6 +35,7 @@ pub enum Tag {
     LibAll,
     LibInst,
     Protons,
+    ProtonList,
 }
 
 pub struct Job {
@@ -69,6 +70,7 @@ pub enum Overlay {
     Launch(Launch),
     Theme { cursor: usize, orig: usize },
     Help,
+    ProtonPick { act: &'static Act, versions: Vec<String>, cursor: usize },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -110,6 +112,7 @@ pub struct App {
     pub logo: Vec<String>,
     pub aurelia_ok: bool,
     pub proton_versions: Vec<String>,
+    pub proton_list: Vec<String>,
     pub count: Option<usize>,
     pub g_pending: bool,
     pub last_search: String,
@@ -153,6 +156,7 @@ impl App {
             logo: logo_txt.lines().map(|s| s.to_string()).collect(),
             aurelia_ok: true,
             proton_versions: vec![],
+            proton_list: vec![],
             count: None,
             g_pending: false,
             last_search: String::new(),
@@ -160,6 +164,7 @@ impl App {
         };
         app.reload_library();
         app.reload_protons();
+        app.reload_proton_list();
         app
     }
 
@@ -203,6 +208,13 @@ impl App {
 
     pub fn reload_protons(&mut self) {
         self.start_job("config protons".into(), vec!["config".into(), "protons".into()], Tag::Protons);
+    }
+    pub fn reload_proton_list(&mut self) {
+        self.start_job(
+            "proton list --json".into(),
+            vec!["proton".into(), "list".into(), "--json".into()],
+            Tag::ProtonList,
+        );
     }
 
     // ---------- trabajos ----------
@@ -309,6 +321,19 @@ impl App {
                                 }
                             }
                         }
+                        Tag::ProtonList => {
+                            if let Some(v) = &self.jobs[job].result {
+                                if let Some(avail) = v.get("available").and_then(|x| x.as_array()) {
+                                    let names: Vec<String> = avail
+                                        .iter()
+                                        .filter_map(|x| x.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                                        .collect();
+                                    if !names.is_empty() {
+                                        self.proton_list = names;
+                                    }
+                                }
+                            }
+                        }
                         Tag::Normal => {
                             let ok = code == Some(0);
                             self.msg = format!("{} {}", if ok { "✓" } else { "✗" }, self.jobs[job].title);
@@ -352,6 +377,14 @@ impl App {
             }
             return;
         }
+        if act.mode == Mode::Pick {
+            let mut versions = self.proton_list.clone();
+            if versions.is_empty() {
+                versions = self.proton_versions.clone();
+            }
+            self.overlay = Overlay::ProtonPick { act, versions, cursor: 0 };
+            return;
+        }
         if let Some(label) = act.ask {
             let pre = match (&app, label.starts_with("AppID")) {
                 (Some(id), true) => {
@@ -371,7 +404,7 @@ impl App {
 
     fn exec(&mut self, act: &'static Act, app: Option<String>, input: String) {
         match act.mode {
-            Mode::Job | Mode::Interactive => {
+            Mode::Job | Mode::Interactive | Mode::Pick => {
                 let args = build_args(act.args, app.as_deref(), &input);
                 self.run_args(args);
             }
@@ -474,6 +507,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             Overlay::Launch(l) => self.key_launch(l, k),
             Overlay::Theme { cursor, orig } => self.key_theme(cursor, orig, k),
             Overlay::Help => {}
+            Overlay::ProtonPick { act, versions, cursor } => self.key_proton_pick(act, versions, cursor, k),
         }
     }
 
@@ -621,6 +655,25 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
         }
         self.theme = c;
         self.overlay = Overlay::Theme { cursor: c, orig };
+    }
+
+    fn key_proton_pick(&mut self, act: &'static Act, versions: Vec<String>, mut c: usize, k: KeyEvent) {
+        let n = versions.len();
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
+            KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
+            KeyCode::Enter => {
+                if let Some(v) = versions.get(c) {
+                    let v = v.clone();
+                    self.overlay = Overlay::None;
+                    self.exec(act, None, v);
+                }
+                return;
+            }
+            _ => {}
+        }
+        self.overlay = Overlay::ProtonPick { act, versions, cursor: c };
     }
 
     fn list_len(&self) -> usize {

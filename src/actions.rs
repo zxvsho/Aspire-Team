@@ -9,6 +9,7 @@ pub enum Mode {
     Launch,
     Patch,
     Revert,
+    Pick,
 }
 
 pub struct Act {
@@ -25,6 +26,9 @@ const fn a(label: &'static str, args: &'static str, tip: &'static str) -> Act {
 }
 const fn q(label: &'static str, args: &'static str, ask: &'static str, tip: &'static str) -> Act {
     Act { label, args, ask: Some(ask), game: false, mode: Mode::Job, tip }
+}
+const fn p(label: &'static str, args: &'static str, tip: &'static str) -> Act {
+    Act { label, args, ask: None, game: false, mode: Mode::Pick, tip }
 }
 const fn g(label: &'static str, args: &'static str, tip: &'static str) -> Act {
     Act { label, args, ask: None, game: true, mode: Mode::Job, tip }
@@ -160,9 +164,9 @@ const MODS: &[Act] = &[
 
 const PLUGINS: &[Act] = &[
     a("Proton: listar", "proton list", "Runtimes instalables e instalados"),
-    q("Proton: instalar", "proton install {}", "Nombre (GE-Proton9-20, Proton-CachyOS…)", "Descarga un runtime"),
-    q("Proton: predeterminado", "proton default {}", "Nombre", "Runtime global por defecto"),
-    q("Proton: desinstalar", "proton uninstall {}", "Nombre", "Borra un runtime"),
+    p("Proton: instalar", "proton install {}", "Elige el runtime de la lista (j/k, Enter)"),
+    p("Proton: predeterminado", "proton default {}", "Elige el runtime global por defecto (j/k, Enter)"),
+    p("Proton: desinstalar", "proton uninstall {}", "Elige el runtime a borrar (j/k, Enter)"),
     a("Proton: mapeos de Steam", "proton mappings", "Herramientas de compatibilidad"),
     a("Runtimes detectados", "config protons", "Proton y Wine detectados"),
     a("umu: estado", "umu status", "Estado y versión"),
@@ -176,7 +180,7 @@ const PLUGINS: &[Act] = &[
     q("luxtorpeda: usar instalación existente", "luxtorpeda path {}", "Ruta", "Omite la descarga"),
     a("luxtorpeda: desinstalar", "luxtorpeda uninstall", "Elimina lo descargado"),
     a("Steam runtime (Wine): estado", "steam-runtime status", "Prefijo maestro de Steam en Wine"),
-    q("Steam runtime: elegir runner", "config steam-runtime-runner {}", "Runner (p. ej. GE-Proton9-20)", "Requerido antes de instalar"),
+    p("Steam runtime: elegir runner", "config steam-runtime-runner {}", "Elige el runner de Steam (j/k, Enter)"),
     i("Steam runtime: instalar", "steam-runtime install", "Instala Steam en Wine (inicias sesión ahí)"),
     i("Steam runtime: iniciar sesión", "steam-runtime login", "Abre Steam en Wine"),
     i("Steam runtime: reparar", "steam-runtime repair", "Respalda y reinstala"),
