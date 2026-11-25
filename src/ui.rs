@@ -106,6 +106,7 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
         Some(j) => {
             let icon = if !j.done { SPIN[app.tick / 2 % 8] } else if j.code == Some(0) { "✓" } else { "✗" };
             title = format!("{icon} {}", j.title);
+            lines.push(Line::styled(format!("comando: {}", j.args.join(" ")), Style::new().fg(t.dim)));
             if !j.done && !j.progress.is_empty() {
                 lines.push(Line::styled(format!("▶ {}", j.progress), Style::new().fg(t.ok).bold()));
             }
