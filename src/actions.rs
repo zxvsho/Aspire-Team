@@ -55,6 +55,8 @@ pub const GAME_ACTS: &[Act] = &[
     g("Verificar archivos", "verify {app}", "Comprueba la integridad de los archivos"),
     g("Desinstalar", "uninstall {app}", "Elimina el juego"),
     g("Detener", "stop {app}", "Detiene el juego en ejecución"),
+    g("Detener (forzar)", "stop {app} --force", "Forza el stop (SIGKILL) si el juego cuelga"),
+    g("Parámetros de lanzamiento", "config game {app}", "Ver/fijar --platform, Proton, launch-options…"),
     g("Información", "info {app}", "Descripción, reseñas, etiquetas, DLC"),
     g("Información extendida", "info {app} --extended", "Requisitos, Metacritic, géneros"),
     g("DLC", "dlc {app}", "DLC con propiedad e instalación"),
