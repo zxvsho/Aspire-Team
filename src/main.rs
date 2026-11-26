@@ -3,7 +3,9 @@ mod app;
 mod backend;
 mod patch;
 mod theme;
+mod tools;
 mod ui;
+mod views;
 
 use anyhow::Result;
 use ratatui::{
@@ -47,5 +49,7 @@ fn main() -> Result<()> {
     let res = run(&mut term, &mut app);
     let _ = execute!(std::io::stdout(), DisableMouseCapture);
     ratatui::restore();
+    // Nada de procesos huérfanos: cerramos los trabajos propios y el demonio.
+    backend::shutdown();
     res
 }

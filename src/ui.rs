@@ -1,11 +1,11 @@
 use crate::{
     actions::*,
     app::*,
-    backend::flatten,
     theme::{Theme, THEMES},
+    views,
 };
 use ratatui::{prelude::*, widgets::*};
-use serde_json::Value;
+use unicode_width::UnicodeWidthStr;
 
 const SPIN: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
 
@@ -13,6 +13,44 @@ pub(crate) fn centered(a: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(a.width);
     let h = h.min(a.height);
     Rect { x: a.x + (a.width - w) / 2, y: a.y + (a.height - h) / 2, width: w, height: h }
+}
+
+/// Índice de la pestaña que hay bajo una columna de la barra superior.
+pub(crate) fn tab_at(width: u16, col: u16) -> Option<usize> {
+    let mut spans: Vec<(usize, u16)> = vec![];
+    spans.push((usize::MAX, 1));
+    for (i, (ic, name)) in SCREENS.iter().enumerate() {
+        let w = UnicodeWidthStr::width(format!(" {ic} {name} ").as_str()) as u16;
+        spans.push((i, w));
+        if i < SCREENS.len() - 1 {
+            spans.push((usize::MAX, 1));
+        }
+    }
+    let total: u16 = spans.iter().map(|(_, w)| *w).sum();
+    let inner = width.saturating_sub(2);
+    let mut x = 1 + inner.saturating_sub(total) / 2;
+    for (i, w) in spans {
+        if col >= x && col < x + w {
+            return (i != usize::MAX).then_some(i);
+        }
+        x += w;
+    }
+    None
+}
+
+/// Rectángulo del overlay, para traducir clics a filas de la lista.
+pub(crate) fn overlay_rect(ov: &Overlay, app: &App, area: Rect) -> Rect {
+    match ov {
+        Overlay::Menu(_) => centered(area, 58, area.height.saturating_sub(1).min(GAME_ACTS.len() as u16 + 2)),
+        Overlay::Theme { .. } => centered(area, 42, THEMES.len() as u16 + 4),
+        Overlay::ProtonPick { versions, .. } => centered(area, 64.min(area.width), (versions.len() + 4) as u16),
+        Overlay::Links { .. } => centered(area, 62.min(area.width), (app.urls.len() + 3) as u16),
+        Overlay::Files { entries, .. } => centered(area, 74.min(area.width), (entries.len() as u16 + 5).min(area.height.saturating_sub(2))),
+        Overlay::Running { .. } => centered(area, 56.min(area.width), (app.running_games.len() as u16 + 5).min(area.height.saturating_sub(2))),
+        Overlay::Login { .. } => centered(area, 56.min(area.width), 9),
+        Overlay::Confirm { .. } => centered(area, 60.min(area.width), 7),
+        _ => centered(area, 70.min(area.width), 3),
+    }
 }
 
 fn fill_bg(f: &mut Frame, r: Rect, t: &Theme) {
@@ -83,67 +121,91 @@ fn tabs(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
     f.render_widget(Paragraph::new(Line::from(spans)).alignment(Alignment::Center).block(blk("MENÚ", t, !app.focus_out)), a);
 }
 
-fn kv_lines(v: &Value, t: &Theme) -> Vec<Line<'static>> {
-    let mut fl = vec![];
-    flatten(v, 0, &mut fl);
-    fl.into_iter()
-        .map(|(ind, k, val)| {
-            let mut sp = vec![Span::raw("  ".repeat(ind))];
-            sp.push(Span::styled(k.clone(), Style::new().fg(if k == "•" { t.accent2 } else { t.accent })));
-            if !val.is_empty() {
-                sp.push(Span::styled(if k.is_empty() { val } else if k == "•" { format!(" {val}") } else { format!(": {val}") }, Style::new().fg(t.fg)));
-            }
-            Line::from(sp)
-        })
-        .collect()
-}
-
 fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
     let mut lines: Vec<Line> = vec![];
     let mut title = "Resultado".to_string();
     match app.cur.and_then(|i| app.jobs.get(i)) {
-        None => lines.push(Line::styled("Elige una acción y pulsa Enter. Aquí verás el resultado.", Style::new().fg(t.dim))),
+        None => lines.push(Line::styled(
+            "Elige una acción y pulsa Enter. Aquí verás el resultado, sin líneas raras.",
+            Style::new().fg(t.dim),
+        )),
         Some(j) => {
-            let icon = if !j.done { SPIN[app.tick / 2 % 8] } else if j.code == Some(0) { "✓" } else { "✗" };
+            let icon = if !j.done {
+                SPIN[app.tick / 2 % 8]
+            } else if j.code == Some(0) {
+                "✓"
+            } else {
+                "✗"
+            };
             title = format!("{icon} {}", j.title);
-            lines.push(Line::styled(format!("comando: {}", j.args.join(" ")), Style::new().fg(t.dim)));
-            if !j.done && !j.progress.is_empty() {
-                lines.push(Line::styled(format!("▶ {}", j.progress), Style::new().fg(t.ok).bold()));
-            }
-            match (&j.result, app.raw) {
-                (Some(v), false) if j.done => {
-                    lines.extend(kv_lines(v, t));
-                    for (e, l) in j.lines.iter().filter(|(e, _)| *e) {
-                        let _ = e;
-                        lines.push(Line::styled(l.clone(), Style::new().fg(t.err)));
-                    }
-                }
-                _ => {
-                    // Descargando con progreso: no muestra las líneas crudas, solo el progreso
-                    let running_with_progress = !j.done && !j.progress.is_empty();
-                    if app.raw || !running_with_progress {
-                        let raw: Vec<(bool, String)> = j.lines.iter().rev().take(2000).cloned().collect::<Vec<_>>().into_iter().rev().collect();
-                        let mut last_blank = true;
-                        for (e, l) in raw {
-                            let txt = l.trim_end().to_string();
-                            if txt.trim().is_empty() {
-                                if !last_blank {
-                                    lines.push(Line::raw(""));
-                                }
-                                last_blank = true;
-                            } else {
-                                lines.push(Line::styled(txt, Style::new().fg(if e { t.warn } else { t.fg })));
-                                last_blank = false;
-                            }
+            let failed = j.done && j.code != Some(0);
+            if app.raw {
+                lines.push(Line::styled(
+                    format!("comando: {}", if j.args.is_empty() { j.title.clone() } else { j.args.join(" ") }),
+                    Style::new().fg(t.dim),
+                ));
+                let raw: Vec<(bool, String)> = j.lines.iter().rev().take(2000).cloned().collect::<Vec<_>>().into_iter().rev().collect();
+                let mut last_blank = true;
+                for (e, l) in raw {
+                    let txt = l.trim_end().to_string();
+                    if txt.trim().is_empty() {
+                        if !last_blank {
+                            lines.push(Line::raw(""));
                         }
+                        last_blank = true;
+                    } else {
+                        lines.push(Line::styled(txt, Style::new().fg(if e { t.warn } else { t.fg })));
+                        last_blank = false;
                     }
                 }
+            } else if !j.done {
+                // En curso: barra de progreso con porcentaje, o estado compacto.
+                match &j.progress {
+                    Some(p) => lines.extend(views::progress_lines(p, t, a.width)),
+                    None => {
+                        lines.push(Line::from(vec![
+                            Span::styled(format!(" {} ", SPIN[app.tick / 2 % 8]), Style::new().fg(t.warn)),
+                            Span::styled(
+                                if j.lines.is_empty() { "Trabajando…".to_string() } else { last_meaningful(j) },
+                                Style::new().fg(t.fg),
+                            ),
+                        ]));
+                    }
+                }
+            } else if failed {
+                lines.extend(views::error_lines(&j.errors, j.code, t, a.width));
+                if let Some(n) = j.result.as_ref().and_then(|v| v.get("event")).and_then(|v| v.as_str()) {
+                    let _ = n;
+                }
+            } else if let Some(v) = &j.result {
+                lines.extend(views::render(&j.args, v, t, a.width));
+                if lines.is_empty() {
+                    lines.push(Line::styled("Sin datos que mostrar.", Style::new().fg(t.dim)));
+                }
+            } else {
+                // Trabajos locales: ya vienen en español, línea a línea.
+                for (e, l) in &j.lines {
+                    if l.trim().is_empty() {
+                        if lines.last().map(|l| !l.spans.is_empty()).unwrap_or(false) {
+                            lines.push(Line::raw(""));
+                        }
+                    } else {
+                        lines.push(Line::styled(l.trim_end().to_string(), Style::new().fg(if *e { t.err } else { t.fg })));
+                    }
+                }
+                if lines.is_empty() {
+                    lines.push(Line::styled(
+                        if j.code == Some(0) { "✓ Hecho, sin nada que mostrar." } else { "El comando no devolvió datos." },
+                        Style::new().fg(t.dim),
+                    ));
+                }
             }
-            if j.done && !lines.is_empty() {
-                lines.push(Line::styled(format!("código: {:?}", j.code), Style::new().fg(t.dim)));
-            }
-            if j.done && lines.is_empty() {
-                lines.push(Line::styled(format!("(sin salida) código {:?}", j.code), Style::new().fg(t.dim)));
+            if j.done && j.code.is_some() && !app.raw && j.code != Some(0) && j.result.is_some() {
+                lines.push(Line::raw(""));
+                lines.push(Line::styled(
+                    format!("código: {}", j.code.unwrap_or(-1)),
+                    Style::new().fg(t.dim),
+                ));
             }
         }
     }
@@ -157,6 +219,23 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
     app.scroll = app.scroll.min(max);
     let p = Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((app.scroll, 0)).block(blk(&title, t, focus));
     f.render_widget(p, a);
+}
+
+/// Última línea con texto de un trabajo, para el estado «en curso».
+fn last_meaningful(j: &Job) -> String {
+    j.lines
+        .iter()
+        .rev()
+        .map(|(_, l)| l.trim())
+        .find(|l| !l.is_empty())
+        .map(|l| {
+            if l.chars().count() > 90 {
+                format!("{}…", l.chars().take(90).collect::<String>())
+            } else {
+                l.to_string()
+            }
+        })
+        .unwrap_or_else(|| "Trabajando…".into())
 }
 
 fn home(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
@@ -311,12 +390,23 @@ fn jobs_panel(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         .map(|(i, j)| {
             let (icon, c) = if !j.done { (SPIN[app.tick / 2 % 8], t.warn) } else if j.code == Some(0) { ("✓", t.ok) } else { ("✗", t.err) };
             let mark = if app.cur == Some(i) { "▸" } else { " " };
+            let prog = j
+                .progress
+                .as_ref()
+                .map(|p| format!("   {:.0}%", p.pct))
+                .unwrap_or_default();
+            let tail = if !j.done {
+                prog
+            } else if j.code == Some(0) {
+                String::new()
+            } else {
+                format!("   {}", views::short_error(&j.errors, j.code))
+            };
             ListItem::new(Line::from(vec![
                 Span::styled(mark, Style::new().fg(t.accent)),
                 Span::styled(format!("{icon} "), Style::new().fg(c)),
                 Span::raw(j.title.clone()),
-                Span::styled(if j.progress.is_empty() { String::new() } else { format!("   {}", j.progress) }, Style::new().fg(t.dim)),
-                Span::styled(if j.done { format!("   código {:?}", j.code) } else { String::new() }, Style::new().fg(t.dim)),
+                Span::styled(tail, Style::new().fg(t.dim)),
             ]))
         })
         .collect();
@@ -339,6 +429,11 @@ fn footer(f: &mut Frame, a: Rect, app: &App, t: &Theme) {
         }
     } else {
         app.msg.clone()
+    };
+    let tip = if app.need_login {
+        format!("Inicia sesión en Steam · pulsa L  ·  {tip}")
+    } else {
+        tip
     };
     let pos = if app.screen == 1 {
         let n = app.filtered().len();
@@ -390,8 +485,7 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
         return;
     }
     if !matches!(app.overlay, Overlay::None) {
-        f.render_widget(Clear, area);
-        fill_bg(f, area, t);
+        // Solo limpiamos el rectángulo del modal, no toda la ventana.
     }
     match &app.overlay {
         Overlay::None => {}
@@ -541,5 +635,119 @@ fn overlays(f: &mut Frame, area: Rect, app: &mut App, t: &Theme) {
             ));
             f.render_widget(Paragraph::new(lines).block(blk("URLs", t, true)), r);
         }
+        Overlay::Files { path, entries, cursor } => {
+            let n = entries.len();
+            let h = (n as u16 + 5).min(area.height.saturating_sub(2));
+            let r = centered(area, 74.min(area.width), h);
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let w = (r.width as usize).saturating_sub(30).max(10);
+            let mut lines: Vec<Line> = vec![];
+            for (i, e) in entries.iter().enumerate() {
+                let sel = i == *cursor;
+                let icon = if e.is_dir { "▸" } else { "·" };
+                let meta = if e.is_dir { "carpeta".to_string() } else { fmt_size(e.size) };
+                let name = if e.name.chars().count() > w {
+                    format!("{}…", e.name.chars().take(w).collect::<String>())
+                } else {
+                    e.name.clone()
+                };
+                let st = if sel { sel_style(t) } else if e.is_dir { Style::new().fg(t.accent2) } else { Style::new().fg(t.fg) };
+                lines.push(Line::from(vec![
+                    Span::styled(if sel { "▸ " } else { "  " }, Style::new().fg(t.accent)),
+                    Span::styled(format!("{icon} "), st),
+                    Span::styled(format!("{name:<w$}", w = w), st),
+                    Span::styled(format!("  {meta}"), Style::new().fg(t.dim)),
+                ]));
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(
+                "Enter abre · h subir · o abrir en el sistema · d borrar · r recargar · Esc cerrar",
+                Style::new().fg(t.accent2),
+            ));
+            let title = format!("Archivos · {}", path.display());
+            f.render_widget(Paragraph::new(lines).block(blk(&title, t, true)), r);
+        }
+        Overlay::Confirm { msg, .. } => {
+            let r = centered(area, 60.min(area.width), 7);
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let lines = vec![
+                Line::raw(""),
+                Line::styled(format!(" {msg}"), Style::new().fg(t.fg)),
+                Line::raw(""),
+                Line::from(vec![
+                    Span::styled("  y ", Style::new().fg(t.ok).bold()),
+                    Span::styled("borrar   ", Style::new().fg(t.fg)),
+                    Span::styled("n ", Style::new().fg(t.accent2).bold()),
+                    Span::styled("cancelar", Style::new().fg(t.fg)),
+                ]),
+            ];
+            f.render_widget(Paragraph::new(lines).block(blk("Confirmar", t, true)), r);
+        }
+        Overlay::Login { cursor } => {
+            let opts = [
+                "Iniciar sesión (usuario, contraseña y Steam Guard)",
+                "Iniciar sesión con QR (app móvil de Steam)",
+                "Salir de Aspire-Team",
+            ];
+            let r = centered(area, 56.min(area.width), 9);
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let mut lines: Vec<Line> = vec![Line::styled(
+                " Steam necesita que inicies sesión.",
+                Style::new().fg(t.accent2),
+            )];
+            for (i, o) in opts.iter().enumerate() {
+                let sel = i == *cursor;
+                lines.push(Line::from(vec![
+                    Span::styled(if sel { " ▸ " } else { "   " }, Style::new().fg(t.accent)),
+                    Span::styled(o.to_string(), if sel { sel_style(t) } else { Style::new().fg(t.fg) }),
+                ]));
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(" j/k mueve · Enter elige · Esc cierra", Style::new().fg(t.dim)));
+            f.render_widget(Paragraph::new(lines).block(blk("Iniciar sesión en Steam", t, true)), r);
+        }
+        Overlay::Running { cursor } => {
+            let n = app.running_games.len();
+            let r = centered(area, 56.min(area.width), (n as u16 + 5).min(area.height.saturating_sub(2)));
+            f.render_widget(Clear, r);
+            fill_bg(f, r, t);
+            let mut lines: Vec<Line> = vec![];
+            for (i, (id, name)) in app.running_games.iter().enumerate() {
+                let sel = i == *cursor;
+                lines.push(Line::from(vec![
+                    Span::styled(if sel { " ▸ " } else { "   " }, Style::new().fg(t.accent)),
+                    Span::styled("● ", Style::new().fg(t.ok)),
+                    Span::styled(format!("{name}  #{id}"), if sel { sel_style(t) } else { Style::new().fg(t.fg) }),
+                ]));
+            }
+            lines.push(Line::raw(""));
+            lines.push(Line::styled(
+                if n > 0 {
+                    " Enter detiene · f fuerza el cierre · r recarga · Esc cierra"
+                } else {
+                    " No hay juegos en ejecución · r recarga · Esc cierra"
+                },
+                Style::new().fg(t.accent2),
+            ));
+            f.render_widget(Paragraph::new(lines).block(blk("Juegos en ejecución", t, true)), r);
+        }
+    }
+}
+
+fn fmt_size(n: u64) -> String {
+    let mut x = n as f64;
+    let mut i = 0usize;
+    let units = ["B", "KB", "MB", "GB", "TB"];
+    while x >= 1024.0 && i + 1 < units.len() {
+        x /= 1024.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{x:.0} {}", units[i])
+    } else {
+        format!("{x:.1} {}", units[i]).replace('.', ",")
     }
 }

@@ -1,6 +1,14 @@
-use crate::{actions::*, backend::*, patch, theme, ui::centered};
+use crate::{
+    actions::*,
+    backend::*,
+    patch, theme, tools,
+    ui::{overlay_rect, tab_at},
+    views,
+};
 use ratatui::{
-    crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+    crossterm::event::{
+        KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    },
     layout::Rect,
     widgets::{ListState, TableState},
 };
@@ -8,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::HashSet,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::mpsc::{channel, Receiver, Sender},
 };
 
@@ -37,17 +45,21 @@ pub enum Tag {
     LibInst,
     Protons,
     ProtonList,
+    Auth,
+    Running,
+    Libraries,
 }
 
 pub struct Job {
     pub title: String,
     pub args: Vec<String>,
     pub lines: Vec<(bool, String)>,
+    pub errors: Vec<String>,
     pub done: bool,
     pub code: Option<i32>,
     pub result: Option<Value>,
     pub tag: Tag,
-    pub progress: String,
+    pub progress: Option<views::Progress>,
 }
 
 pub enum PKind {
@@ -64,6 +76,14 @@ pub struct Prompt {
     pub kind: PKind,
 }
 
+#[derive(Clone)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: PathBuf,
+    pub is_dir: bool,
+    pub size: u64,
+}
+
 pub enum Overlay {
     None,
     Menu(usize),
@@ -73,6 +93,10 @@ pub enum Overlay {
     Help,
     ProtonPick { act: &'static Act, versions: Vec<String>, cursor: usize },
     Links { cursor: usize },
+    Files { path: PathBuf, entries: Vec<FileEntry>, cursor: usize },
+    Confirm { msg: String, path: PathBuf, dir: PathBuf },
+    Login { cursor: usize },
+    Running { cursor: usize },
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -121,12 +145,19 @@ pub struct App {
     pub g_pending: bool,
     pub last_search: String,
     pub search_dir: i32,
+    pub account: Option<Value>,
+    pub running_games: Vec<(String, String)>,
+    pub libraries: Vec<(String, f64)>,
+    pub need_login: bool,
 }
 
 impl App {
     pub fn new() -> Self {
         let (tx, rx) = channel();
-        let cfg: Cfg = std::fs::read_to_string(cfg_dir().join("config.toml")).ok().and_then(|s| toml::from_str(&s).ok()).unwrap_or_default();
+        let cfg: Cfg = std::fs::read_to_string(cfg_dir().join("config.toml"))
+            .ok()
+            .and_then(|s| toml::from_str(&s).ok())
+            .unwrap_or_default();
         let logo_txt = std::fs::read_to_string(cfg_dir().join("logo.txt")).unwrap_or_else(|_| LOGO.to_string());
         let mut app = App {
             screen: 0,
@@ -141,9 +172,7 @@ impl App {
             show_jobs: false,
             tx,
             rx,
-            theme: theme::index_of(if let Some(name) = cfg.theme.as_deref() {
-                if name == "Sistema" { "Sistema" } else { name }
-            } else { "Sistema" }),
+            theme: theme::index_of(cfg.theme.as_deref().unwrap_or("Sistema")),
             overlay: Overlay::None,
             leader: false,
             games: vec![],
@@ -167,10 +196,17 @@ impl App {
             g_pending: false,
             last_search: String::new(),
             search_dir: 1,
+            account: None,
+            running_games: vec![],
+            libraries: vec![],
+            need_login: false,
         };
         app.reload_library();
         app.reload_protons();
         app.reload_proton_list();
+        app.reload_running();
+        app.reload_libraries();
+        app.start_job("account".into(), vec!["account".into()], Tag::Auth);
         app
     }
 
@@ -215,18 +251,37 @@ impl App {
     pub fn reload_protons(&mut self) {
         self.start_job("config protons".into(), vec!["config".into(), "protons".into()], Tag::Protons);
     }
+
     pub fn reload_proton_list(&mut self) {
         self.start_job(
             "proton list --json".into(),
-            vec!["proton".into(), "list".into(), "--json".into()],
+            vec!["proton".into(), "list".into()],
             Tag::ProtonList,
         );
+    }
+
+    pub fn reload_running(&mut self) {
+        self.start_job("running".into(), vec!["running".into()], Tag::Running);
+    }
+
+    pub fn reload_libraries(&mut self) {
+        self.start_job("libraries".into(), vec!["libraries".into()], Tag::Libraries);
     }
 
     // ---------- trabajos ----------
     fn new_job(&mut self, title: String, args: Vec<String>, tag: Tag) -> usize {
         let id = self.jobs.len();
-        self.jobs.push(Job { title, args, lines: vec![], done: false, code: None, result: None, tag, progress: String::new() });
+        self.jobs.push(Job {
+            title,
+            args,
+            lines: vec![],
+            errors: vec![],
+            done: false,
+            code: None,
+            result: None,
+            tag,
+            progress: None,
+        });
         if tag == Tag::Normal {
             self.cur = Some(id);
             self.show_job_out = true;
@@ -236,8 +291,18 @@ impl App {
     }
 
     pub fn start_job(&mut self, title: String, args: Vec<String>, tag: Tag) {
+        let title = if tag == Tag::Normal {
+            views::job_title(&args, &self.games).unwrap_or(title)
+        } else {
+            title
+        };
         let id = self.new_job(title, args.clone(), tag);
         spawn_job(id, args, self.tx.clone());
+    }
+
+    fn start_shell(&mut self, title: String, command: String) {
+        let id = self.new_job(title, vec![], Tag::Normal);
+        spawn_shell(id, command, self.tx.clone());
     }
 
     fn run_args(&mut self, args: Vec<String>) {
@@ -247,13 +312,8 @@ impl App {
         if is_interactive(&args) {
             self.pending = Some(args);
         } else {
-            let mut jargs = args.clone();
-            // Sale estructurada (--json): la app muestra salidas organizadas con kv_lines.
-            if jargs.first().map(|s| s.as_str()) != Some("play") {
-                jargs.push("--json".into());
-            }
             let title = format!("aurelia {}", args.join(" "));
-            self.start_job(title, jargs, Tag::Normal);
+            self.start_job(title, args, Tag::Normal);
         }
     }
 
@@ -284,14 +344,21 @@ impl App {
         while let Ok(m) = self.rx.try_recv() {
             match m {
                 Msg::Line { job, err, text } => {
-                    self.push_urls(&text);
-                    if let Some(j) = self.jobs.get_mut(job) {
-                        if !err {
-                            if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                                if v.get("event").and_then(|e| e.as_str()) == Some("progress") {
-                                    j.progress = fmt_progress(&v);
+                    if !err {
+                        self.push_urls(&text);
+                        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                            if let Some(p) = views::parse_progress(&v) {
+                                if let Some(j) = self.jobs.get_mut(job) {
+                                    if j.tag == Tag::Normal {
+                                        j.progress = Some(p);
+                                    }
                                 }
                             }
+                        }
+                    }
+                    if let Some(j) = self.jobs.get_mut(job) {
+                        if err {
+                            j.errors.push(text.clone());
                         }
                         if j.tag == Tag::Normal {
                             j.lines.push((err, text));
@@ -299,31 +366,40 @@ impl App {
                     }
                 }
                 Msg::Done { job, code, stdout } => {
-                    let Some(j) = self.jobs.get_mut(job) else { continue };
-                    j.done = true;
-                    j.code = code;
-                    j.result = parse_result(&stdout);
-                    let tag = j.tag;
-                    let first = j.args.first().cloned().unwrap_or_default();
+                    let (tag, first, errors, has_out) = {
+                        let Some(j) = self.jobs.get_mut(job) else { continue };
+                        j.done = true;
+                        j.code = code;
+                        j.result = parse_result(&stdout);
+                        j.progress = None;
+                        // Los errores de Aurelia vienen en stdout como JSON.
+                        if code != Some(0) {
+                            if let Some(v) = &j.result {
+                                if v.get("error").is_some() {
+                                    j.errors.push(v.to_string());
+                                }
+                            }
+                        }
+                        let has_out = j.lines.iter().any(|(_, l)| !l.trim().is_empty()) || j.result.is_some();
+                        (j.tag, j.args.first().cloned().unwrap_or_default(), j.errors.clone(), has_out)
+                    };
                     if code.is_none() {
                         self.aurelia_ok = false;
                         self.msg = "No se encontró `aurelia`. Instálalo con: yay -S aurelia".into();
                     }
                     match tag {
                         Tag::LibAll => {
-                            if let Some(v) = &self.jobs[job].result {
-                                let g = extract_games(v);
-                                if !g.is_empty() {
-                                    self.games = g;
-                                }
-                            }
-                            if code != Some(0) && code.is_some() && self.games.is_empty() {
+                            let g = self.jobs[job].result.as_ref().map(extract_games).unwrap_or_default();
+                            if !g.is_empty() {
+                                self.games = g;
+                                self.need_login = false;
+                            } else if code != Some(0) && code.is_some() && self.games.is_empty() {
                                 self.msg = "No pude leer la biblioteca: inicia sesión en Sistema → Iniciar sesión".into();
                             }
                         }
                         Tag::LibInst => {
-                            if let Some(v) = &self.jobs[job].result {
-                                let g = extract_games(v);
+                            let g = self.jobs[job].result.as_ref().map(extract_games).unwrap_or_default();
+                            if !g.is_empty() {
                                 self.inst = g.iter().map(|x| x.id.clone()).collect();
                                 if self.games.is_empty() {
                                     self.games = g;
@@ -333,17 +409,12 @@ impl App {
                         Tag::Protons => {
                             if let Some(v) = &self.jobs[job].result {
                                 let mut versions = vec![];
-                                if let Some(custom) = v.get("custom").and_then(|x| x.as_array()) {
-                                    for c in custom {
-                                        if let Some(s) = c.as_str() {
-                                            versions.push(s.to_string());
-                                        }
-                                    }
-                                }
-                                if let Some(steam) = v.get("steam").and_then(|x| x.as_array()) {
-                                    for s in steam {
-                                        if let Some(s) = s.as_str() {
-                                            versions.push(s.to_string());
+                                for key in ["custom", "steam"] {
+                                    if let Some(arr) = v.get(key).and_then(|x| x.as_array()) {
+                                        for s in arr {
+                                            if let Some(s) = s.as_str() {
+                                                versions.push(s.to_string());
+                                            }
                                         }
                                     }
                                 }
@@ -374,22 +445,86 @@ impl App {
                                 }
                             }
                         }
+                        Tag::Running => {
+                            if let Some(v) = &self.jobs[job].result {
+                                if let Some(a) = v.get("running").and_then(|x| x.as_array()) {
+                                    self.running_games = a
+                                        .iter()
+                                        .map(|g| {
+                                            let id = g
+                                                .get("app_id")
+                                                .map(|x| {
+                                                    x.as_u64()
+                                                        .map(|n| n.to_string())
+                                                        .or_else(|| x.as_str().map(|s| s.to_string()))
+                                                        .unwrap_or_else(|| x.to_string())
+                                                })
+                                                .unwrap_or_default();
+                                            let name = g
+                                                .get("name")
+                                                .and_then(|x| x.as_str())
+                                                .map(|s| s.to_string())
+                                                .unwrap_or_else(|| format!("AppID {id}"));
+                                            (id, name)
+                                        })
+                                        .collect();
+                                }
+                            }
+                        }
+                        Tag::Libraries => {
+                            if let Some(v) = &self.jobs[job].result {
+                                if let Some(a) = v.get("libraries").and_then(|x| x.as_array()) {
+                                    self.libraries = a
+                                        .iter()
+                                        .filter_map(|l| {
+                                            Some((
+                                                l.get("path")?.as_str()?.to_string(),
+                                                l.get("free_bytes").and_then(|x| x.as_f64()).unwrap_or(0.0),
+                                            ))
+                                        })
+                                        .collect();
+                                }
+                            }
+                        }
+                        Tag::Auth => {
+                            if code == Some(0) {
+                                self.account = self.jobs[job].result.clone();
+                                self.need_login = false;
+                            } else if views::is_auth_error(&errors, code) {
+                                self.need_login = true;
+                                self.screen = 7;
+                                self.sidebar_cursor = 7;
+                                self.overlay = Overlay::Login { cursor: 0 };
+                                self.msg = "Inicia sesión en Steam para continuar".into();
+                            }
+                        }
                         Tag::Normal => {
                             let ok = code == Some(0);
                             let title = self.jobs[job].title.clone();
-                            let has_out = self.jobs[job]
-                                .lines
-                                .iter()
-                                .any(|(_, l)| !l.trim().is_empty())
-                                || self.jobs[job].result.is_some();
-                            self.msg = if ok && !has_out {
-                                format!("✓ {title} — sin resultados")
+                            self.msg = if ok {
+                                if has_out {
+                                    format!("✓ {title}")
+                                } else {
+                                    format!("✓ {title} — sin resultados")
+                                }
                             } else {
-                                format!("{} {}", if ok { "✓" } else { "✗" }, title)
+                                format!("✗ {}", views::short_error(&errors, code))
                             };
                             if ok && ["install", "uninstall", "update", "move", "verify"].contains(&first.as_str()) {
                                 self.reload_installed();
                             }
+                            if ["stop", "play"].contains(&first.as_str()) {
+                                self.reload_running();
+                            }
+                        }
+                    }
+                    if views::is_auth_error(&errors, code) && tag != Tag::Auth {
+                        self.msg = "Necesitas iniciar sesión en Steam (Sistema → Iniciar sesión)".into();
+                        self.need_login = true;
+                        if tag == Tag::Normal && matches!(self.overlay, Overlay::None) {
+                            self.screen = 7;
+                            self.sidebar_cursor = 7;
+                            self.overlay = Overlay::Login { cursor: 0 };
                         }
                     }
                 }
@@ -399,6 +534,8 @@ impl App {
 
     pub fn after_interactive(&mut self) {
         self.reload_library();
+        self.reload_running();
+        self.start_job("account".into(), vec!["account".into()], Tag::Auth);
         self.msg = "Volviste de aurelia".into();
     }
 
@@ -446,7 +583,11 @@ impl App {
         if let Some(label) = act.ask {
             let pre = match (&app, label.starts_with("AppID")) {
                 (Some(id), true) => {
-                    if label.trim() == "AppID" { id.clone() } else { format!("{id} ") }
+                    if label.trim() == "AppID" {
+                        id.clone()
+                    } else {
+                        format!("{id} ")
+                    }
                 }
                 _ => String::new(),
             };
@@ -471,7 +612,11 @@ impl App {
                 let Some(id) = app else { return };
                 match self.game_dir(&id) {
                     Some(dst) => self.start_patch(input.trim().to_string(), dst),
-                    None => self.prompt("Carpeta de instalación del juego", String::new(), PKind::PatchDst(input.trim().to_string())),
+                    None => self.prompt(
+                        "Carpeta de instalación del juego",
+                        String::new(),
+                        PKind::PatchDst(input.trim().to_string()),
+                    ),
                 }
             }
             Mode::Revert => {
@@ -481,12 +626,70 @@ impl App {
                     None => self.prompt("Carpeta de instalación del juego", String::new(), PKind::RevertDst),
                 }
             }
+            Mode::OpenDir => {
+                let Some(id) = app else { return };
+                match self.game_dir(&id) {
+                    Some(d) => {
+                        let _ = tools::open_path(&d);
+                    }
+                    None => self.msg = "Este juego no está instalado (no hay carpeta conocida).".into(),
+                }
+            }
+            Mode::Browse => {
+                let Some(id) = app else { return };
+                match self.game_dir(&id) {
+                    Some(d) => self.open_files(PathBuf::from(d)),
+                    None => self.msg = "Este juego no está instalado (no hay carpeta conocida).".into(),
+                }
+            }
+            Mode::Saves => self.open_saves(),
+            Mode::OpenPrefix => {
+                let Some(id) = app else { return };
+                match tools::prefix_dir(&id) {
+                    Some(p) => {
+                        let _ = tools::open_path(&p.to_string_lossy());
+                    }
+                    None => self.msg = "Este juego todavía no tiene prefijo de Wine.".into(),
+                }
+            }
+            Mode::OpenUrl => {
+                let Some(id) = app else { return };
+                let url = self
+                    .selected_game()
+                    .and_then(|g| g.raw.get("store_url").and_then(|x| x.as_str()).map(|s| s.to_string()))
+                    .unwrap_or_else(|| format!("https://store.steampowered.com/app/{id}"));
+                let _ = tools::open_url(&url);
+            }
+            Mode::DiskInfo => {
+                let Some(id) = app else { return };
+                self.start_disk_info(id);
+            }
+            Mode::LaunchPrefix => {
+                let Some(id) = app else { return };
+                self.start_launch_prefix(id, act.args);
+            }
+            Mode::Shell | Mode::ShellInteractive => {
+                let id = app.unwrap_or_default();
+                let dir = self.game_dir(&id).unwrap_or_default();
+                let cmd = act.args.replace("{appdir}", &dir).replace("{app}", &id);
+                if act.mode == Mode::Shell {
+                    self.start_shell(act.label.to_string(), cmd);
+                } else {
+                    self.pending = Some(vec!["__shell".into(), cmd]);
+                }
+            }
+            Mode::ExtStatus => {
+                let job = self.new_job("Extensiones del sistema".into(), vec![], Tag::Normal);
+                spawn_local(job, self.tx.clone(), move |log| tools::extensions_status(log));
+            }
         }
     }
 
     fn start_patch(&mut self, src: String, dst: String) {
         let id = self.new_job(format!("parche {src} → {dst}"), vec![], Tag::Normal);
-        spawn_local(id, self.tx.clone(), move |log| patch::apply(std::path::Path::new(&src), std::path::Path::new(&dst), log));
+        spawn_local(id, self.tx.clone(), move |log| {
+            patch::apply(std::path::Path::new(&src), std::path::Path::new(&dst), log)
+        });
     }
 
     fn start_revert(&mut self, dst: String) {
@@ -494,92 +697,211 @@ impl App {
         spawn_local(id, self.tx.clone(), move |log| patch::revert(std::path::Path::new(&dst), log));
     }
 
-    // ---------- teclado ----------
-pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16, u16)) {
-    use ratatui::crossterm::event::MouseEventKind;
-    let (_w, h) = size;
-    match m.kind {
-        MouseEventKind::ScrollDown => {
-            self.move_by(3);
+    fn start_disk_info(&mut self, id: String) {
+        let Some(dir) = self.game_dir(&id) else {
+            self.msg = "Este juego no está instalado (no hay carpeta conocida).".into();
+            return;
+        };
+        let job = self.new_job(format!("Tamaño y disco · {dir}"), vec![], Tag::Normal);
+        spawn_local(job, self.tx.clone(), move |log| tools::disk_info(&dir, log));
+    }
+
+    fn start_launch_prefix(&mut self, id: String, prefix: &'static str) {
+        let job = self.new_job(format!("Opciones de lanzamiento · {prefix}"), vec![], Tag::Normal);
+        spawn_local(job, self.tx.clone(), move |log| tools::launch_prefix(&id, prefix, log));
+    }
+
+    fn open_saves(&mut self) {
+        let id = match self.selected_game() {
+            Some(g) => g.id.clone(),
+            None => {
+                self.msg = "Elige un juego primero".into();
+                return;
+            }
+        };
+        match tools::saves_dir(&id) {
+            Some(p) => {
+                let _ = tools::open_path(&p.to_string_lossy());
+            }
+            None => self.msg = "Steam no tiene guardados para este juego.".into(),
         }
-        MouseEventKind::ScrollUp => {
-            self.move_by(-3);
+    }
+
+    fn open_files(&mut self, path: PathBuf) {
+        match load_entries(&path) {
+            Ok(entries) => self.overlay = Overlay::Files { path, entries, cursor: 0 },
+            Err(e) => self.msg = format!("No pude abrir la carpeta: {e}"),
         }
-        MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
-            let is_menu = matches!(self.overlay, Overlay::Menu(_));
-            let is_theme = matches!(self.overlay, Overlay::Theme { .. });
-            let is_help = matches!(self.overlay, Overlay::Help);
-            if is_help || is_menu || is_theme {
-                // Click anywhere closes the overlay (use j/k + Enter to select)
-                self.overlay = Overlay::None;
-                return;
-            }
-            // Tab bar (rows 0-2): switch section by column
-            if m.row < 3 {
-                let tab_width = _w / 8;
-                if tab_width > 0 {
-                    let idx = (m.column / tab_width).min(7) as usize;
-                    self.goto(idx);
-                }
-                return;
-            }
-            // Overlays con lista (Links, ProtonPick): clic para seleccionar
-            if matches!(self.overlay, Overlay::Links { .. }) {
-                let area = Rect::new(0, 0, _w, h);
-                let n = self.urls.len();
-                let r = centered(area, 62.min(area.width), (n + 3) as u16);
-                let idx = m.row.saturating_sub(r.y + 1) as usize;
-                if idx < n {
-                    let u = self.urls[idx].clone();
-                    let _ = std::process::Command::new("xdg-open").arg(u).spawn();
-                }
-                self.overlay = Overlay::None;
-                return;
-            }
-            if matches!(self.overlay, Overlay::ProtonPick { .. }) {
-                let ov = std::mem::replace(&mut self.overlay, Overlay::None);
-                if let Overlay::ProtonPick { act, versions, .. } = ov {
-                    let area = Rect::new(0, 0, _w, h);
-                    let n = versions.len();
-                    let r = centered(area, 64.min(area.width), (n + 4) as u16);
-                    let idx = m.row.saturating_sub(r.y + 1) as usize;
-                    if idx < n {
-                        let v = versions[idx].clone();
-                        self.exec(act, None, v);
+    }
+
+    fn stop_game(&mut self, id: String, force: bool) {
+        let mut args = vec!["stop".to_string(), id];
+        if force {
+            args.push("--force".into());
+        }
+        self.run_args(args);
+        self.overlay = Overlay::None;
+    }
+
+    fn login_activate(&mut self, i: usize) {
+        match i {
+            0 => self.pending = Some(vec!["login".into()]),
+            1 => self.pending = Some(vec!["login".into(), "--qr".into(), "--timeout".into(), "120".into()]),
+            _ => self.quit = true,
+        }
+        self.overlay = Overlay::None;
+    }
+
+    // ---------- ratón ----------
+    pub fn on_mouse(&mut self, m: MouseEvent, size: (u16, u16)) {
+        let (w, h) = size;
+        let area = Rect::new(0, 3, w, h.saturating_sub(5));
+        match m.kind {
+            MouseEventKind::ScrollDown => self.move_by(3),
+            MouseEventKind::ScrollUp => self.move_by(-3),
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !matches!(self.overlay, Overlay::None) {
+                    let r = overlay_rect(&self.overlay, self, area);
+                    let idx = (m.row as usize).saturating_sub(r.y as usize + 1);
+                    match &self.overlay {
+                        Overlay::Menu(c) => {
+                            let c = *c;
+                            if idx < GAME_ACTS.len() {
+                                if idx == c {
+                                    self.trigger(&GAME_ACTS[idx]);
+                                } else {
+                                    self.overlay = Overlay::Menu(idx);
+                                }
+                            } else {
+                                self.overlay = Overlay::None;
+                            }
+                        }
+                        Overlay::Theme { cursor, orig } => {
+                            let (cur, orig) = (*cursor, *orig);
+                            if idx < theme::THEMES.len() {
+                                if idx == cur {
+                                    self.theme = idx;
+                                    self.save_cfg();
+                                    self.overlay = Overlay::None;
+                                } else {
+                                    self.theme = idx;
+                                    self.overlay = Overlay::Theme { cursor: idx, orig };
+                                }
+                            }
+                        }
+                        Overlay::Help | Overlay::Prompt(_) | Overlay::Launch(_) => {
+                            self.overlay = Overlay::None;
+                        }
+                        Overlay::ProtonPick { act, versions, cursor } => {
+                            let (act, cur, n) = (*act, *cursor, versions.len());
+                            if idx < n {
+                                if idx == cur {
+                                    let v = versions[idx].clone();
+                                    self.overlay = Overlay::None;
+                                    self.exec(act, None, v);
+                                } else {
+                                    self.overlay = Overlay::ProtonPick { act, versions: versions.clone(), cursor: idx };
+                                }
+                            }
+                        }
+                        Overlay::Links { .. } => {
+                            if idx < self.urls.len() {
+                                let u = self.urls[idx].clone();
+                                let _ = tools::open_url(&u);
+                            }
+                            self.overlay = Overlay::None;
+                        }
+                        Overlay::Files { path, entries, cursor } => {
+                            let (path, entries, cur) = (path.clone(), entries.clone(), *cursor);
+                            if idx < entries.len() {
+                                if idx == cur {
+                                    self.file_activate(&path, &entries[idx]);
+                                } else {
+                                    self.overlay = Overlay::Files { path, entries, cursor: idx };
+                                }
+                            }
+                        }
+                        Overlay::Confirm { dir, .. } => {
+                            let dir = dir.clone();
+                            self.open_files(dir);
+                        }
+                        Overlay::Login { cursor } => {
+                            let cur = *cursor;
+                            let idx = idx.saturating_sub(1);
+                            if idx < 3 {
+                                if idx == cur {
+                                    self.login_activate(idx);
+                                } else {
+                                    self.overlay = Overlay::Login { cursor: idx };
+                                }
+                            }
+                        }
+                        Overlay::Running { cursor } => {
+                            let cur = *cursor;
+                            let n = self.running_games.len();
+                            if idx < n {
+                                if idx == cur {
+                                    let id = self.running_games[idx].0.clone();
+                                    self.stop_game(id, false);
+                                } else {
+                                    self.overlay = Overlay::Running { cursor: idx };
+                                }
+                            }
+                        }
+                        Overlay::None => {}
                     }
+                    return;
                 }
-                return;
-            }
-            // Library (screen 1): main content area
-            if self.screen == 1 {
-                let row = m.row as usize;
-                if row >= 7 && row < h as usize - 2 {
-                    let idx = row - 7;
+                // Pestañas (filas 0-2)
+                if m.row < 3 {
+                    if let Some(i) = tab_at(w, m.column) {
+                        self.goto(i);
+                    }
+                    return;
+                }
+                // Biblioteca
+                if self.screen == 1 {
+                    let first = area.y as usize + 1;
+                    let off = self.lib_state.offset();
+                    let idx = off + (m.row as usize).saturating_sub(first);
                     let filtered = self.filtered();
                     if idx < filtered.len() {
                         self.cursor[1] = idx;
+                        self.show_job_out = false;
                     }
+                    return;
                 }
-                return;
-            }
-            // Action lists (screens 2-7): select by row
-            if self.screen >= 2 {
-                let row = m.row as usize;
-                if row >= 7 && row < h as usize - 2 {
-                    let idx = row - 7;
+                // Listas de acciones (pantallas 2-7)
+                if self.screen >= 2 {
+                    let first = area.y as usize + 1;
+                    let off = self.list_state.offset();
+                    let idx = off + (m.row as usize).saturating_sub(first);
                     let acts = acts_for(self.screen);
                     if idx < acts.len() {
                         self.cursor[self.screen] = idx;
                     }
                 }
             }
+            MouseEventKind::Down(MouseButton::Right) => {
+                self.overlay = Overlay::None;
+            }
+            _ => {}
         }
-        MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Right) => {
-            self.overlay = Overlay::None;
-        }
-        _ => {}
     }
-}
+
+    fn file_activate(&mut self, path: &Path, e: &FileEntry) {
+        if e.is_dir {
+            match load_entries(&e.path) {
+                Ok(entries) => self.overlay = Overlay::Files { path: e.path.clone(), entries, cursor: 0 },
+                Err(err) => self.msg = format!("No pude abrir la carpeta: {err}"),
+            }
+        } else {
+            let _ = tools::open_path(&e.path.to_string_lossy());
+        }
+        let _ = path;
+    }
+
+    // ---------- teclado ----------
     pub fn on_key(&mut self, k: KeyEvent) {
         if k.kind == KeyEventKind::Release {
             return;
@@ -594,6 +916,10 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             Overlay::Help => {}
             Overlay::ProtonPick { act, versions, cursor } => self.key_proton_pick(act, versions, cursor, k),
             Overlay::Links { cursor } => self.key_links(cursor, k),
+            Overlay::Files { path, entries, cursor } => self.key_files(path, entries, cursor, k),
+            Overlay::Confirm { msg, path, dir } => self.key_confirm(msg, path, dir, k),
+            Overlay::Login { cursor } => self.key_login(cursor, k),
+            Overlay::Running { cursor } => self.key_running(cursor, k),
         }
     }
 
@@ -605,11 +931,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Up | KeyCode::Char('k') => c = (c + n - 1) % n,
             KeyCode::Char('g') => c = 0,
             KeyCode::Char('G') => c = n - 1,
-            KeyCode::Enter => {
-                self.trigger(&GAME_ACTS[c]);
-                return;
-            }
-            KeyCode::Char('n') => {
+            KeyCode::Enter | KeyCode::Char('n') => {
                 self.trigger(&GAME_ACTS[c]);
                 return;
             }
@@ -749,9 +1071,9 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Esc | KeyCode::Char('q') => return,
             KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
             KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
-            KeyCode::Enter if n > 0 => {
+            KeyCode::Enter | KeyCode::Char('n') if n > 0 => {
                 if let Some(u) = self.urls.get(c) {
-                    let _ = std::process::Command::new("xdg-open").arg(u).spawn();
+                    let _ = tools::open_url(u);
                 }
                 return;
             }
@@ -766,7 +1088,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Esc | KeyCode::Char('q') => return,
             KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
             KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
-            KeyCode::Enter => {
+            KeyCode::Enter | KeyCode::Char('n') => {
                 if let Some(v) = versions.get(c) {
                     let v = v.clone();
                     self.overlay = Overlay::None;
@@ -777,6 +1099,108 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             _ => {}
         }
         self.overlay = Overlay::ProtonPick { act, versions, cursor: c };
+    }
+
+    fn key_files(&mut self, path: PathBuf, entries: Vec<FileEntry>, mut c: usize, k: KeyEvent) {
+        let n = entries.len();
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
+            KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
+            KeyCode::Char('g') => c = 0,
+            KeyCode::Char('G') => c = n.saturating_sub(1),
+            KeyCode::Enter | KeyCode::Char('n') | KeyCode::Char('l') => {
+                if let Some(e) = entries.get(c) {
+                    self.file_activate(&path, e);
+                }
+                return;
+            }
+            KeyCode::Backspace | KeyCode::Left | KeyCode::Char('h') => {
+                if let Some(p) = path.parent() {
+                    let p = p.to_path_buf();
+                    self.open_files(p);
+                }
+                return;
+            }
+            KeyCode::Char('o') => {
+                let _ = tools::open_path(&path.to_string_lossy());
+                self.overlay = Overlay::Files { path, entries, cursor: c };
+                return;
+            }
+            KeyCode::Char('d') => {
+                if let Some(e) = entries.get(c) {
+                    self.overlay = Overlay::Confirm {
+                        msg: format!("¿Borrar «{}»? No se puede deshacer.", e.name),
+                        path: e.path.clone(),
+                        dir: path.clone(),
+                    };
+                }
+                return;
+            }
+            KeyCode::Char('r') => {
+                self.open_files(path);
+                return;
+            }
+            _ => {}
+        }
+        self.overlay = Overlay::Files { path, entries, cursor: c };
+    }
+
+    fn key_confirm(&mut self, msg: String, path: PathBuf, dir: PathBuf, k: KeyEvent) {
+        match k.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => match tools::remove_path(&path) {
+                Ok(()) => {
+                    self.msg = "✓ Borrado".into();
+                    self.open_files(dir);
+                }
+                Err(e) => {
+                    self.msg = format!("No pude borrar: {e}");
+                    self.open_files(dir);
+                }
+            },
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => self.open_files(dir),
+            _ => self.overlay = Overlay::Confirm { msg, path, dir },
+        }
+    }
+
+    fn key_login(&mut self, mut c: usize, k: KeyEvent) {
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Down | KeyCode::Char('j') => c = (c + 1) % 3,
+            KeyCode::Up | KeyCode::Char('k') => c = (c + 2) % 3,
+            KeyCode::Enter | KeyCode::Char('n') => {
+                self.login_activate(c);
+                return;
+            }
+            _ => {}
+        }
+        self.overlay = Overlay::Login { cursor: c };
+    }
+
+    fn key_running(&mut self, mut c: usize, k: KeyEvent) {
+        let n = self.running_games.len();
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Down | KeyCode::Char('j') if n > 0 => c = (c + 1) % n,
+            KeyCode::Up | KeyCode::Char('k') if n > 0 => c = (c + n - 1) % n,
+            KeyCode::Char('r') => {
+                self.reload_running();
+                self.overlay = Overlay::Running { cursor: c };
+                return;
+            }
+            KeyCode::Enter | KeyCode::Char('n') if n > 0 => {
+                let id = self.running_games[c].0.clone();
+                self.stop_game(id, false);
+                return;
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') if n > 0 => {
+                let id = self.running_games[c].0.clone();
+                self.stop_game(id, true);
+                return;
+            }
+            _ => {}
+        }
+        self.overlay = Overlay::Running { cursor: c };
     }
 
     fn list_len(&self) -> usize {
@@ -805,7 +1229,7 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
     fn goto(&mut self, s: usize) {
         self.screen = s.min(7);
         self.sidebar_cursor = self.screen;
-        self.focus_out = false; // always start on list/menu
+        self.focus_out = false;
         self.scroll = 0;
         self.list_state = ListState::default();
     }
@@ -853,6 +1277,10 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 KeyCode::Char('j') => self.show_jobs = !self.show_jobs,
                 KeyCode::Char('c') => self.prompt("aurelia", String::new(), PKind::Palette),
                 KeyCode::Char('r') => self.reload_library(),
+                KeyCode::Char('x') => {
+                    self.reload_running();
+                    self.overlay = Overlay::Running { cursor: 0 };
+                }
                 KeyCode::Char('q') => self.quit = true,
                 _ => {}
             }
@@ -861,27 +1289,69 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
 
         // ---- teclas globales ----
         match k.code {
-            KeyCode::Char(' ') => { self.leader = true; return; }
-            KeyCode::Char('T') => { self.overlay = Overlay::Theme { cursor: self.theme, orig: self.theme }; return; }
+            KeyCode::Char(' ') => {
+                self.leader = true;
+                return;
+            }
+            KeyCode::Char('T') => {
+                self.overlay = Overlay::Theme { cursor: self.theme, orig: self.theme };
+                return;
+            }
             KeyCode::Char('U') => {
                 if !self.urls.is_empty() {
                     self.overlay = Overlay::Links { cursor: 0 };
                 }
                 return;
             }
-            KeyCode::Char('?') => { self.overlay = Overlay::Help; return; }
-            KeyCode::Char(':') => { self.prompt("aurelia", String::new(), PKind::Palette); return; }
-            KeyCode::Char('g') => { self.g_pending = true; return; }
-            KeyCode::Char(c @ '1'..='8') => { self.goto(c as usize - '1' as usize); return; }
+            KeyCode::Char('X') => {
+                self.reload_running();
+                self.overlay = Overlay::Running { cursor: 0 };
+                return;
+            }
+            KeyCode::Char('L') if self.need_login => {
+                self.overlay = Overlay::Login { cursor: 0 };
+                return;
+            }
+            KeyCode::Char('?') => {
+                self.overlay = Overlay::Help;
+                return;
+            }
+            KeyCode::Char(':') => {
+                self.prompt("aurelia", String::new(), PKind::Palette);
+                return;
+            }
+            KeyCode::Char('g') => {
+                self.g_pending = true;
+                return;
+            }
+            KeyCode::Char(c @ '1'..='8') => {
+                self.goto(c as usize - '1' as usize);
+                return;
+            }
             KeyCode::Char('n') if self.screen != 0 => {
                 self.activate();
                 return;
             }
-            KeyCode::Char('v') => { self.raw = !self.raw; return; }
-            KeyCode::Char('[') => { self.cycle_job(-1); return; }
-            KeyCode::Char(']') => { self.cycle_job(1); return; }
-            KeyCode::Tab => { self.goto((self.screen + 1) % 8); return; }
-            KeyCode::BackTab => { self.goto((self.screen + 7) % 8); return; }
+            KeyCode::Char('v') => {
+                self.raw = !self.raw;
+                return;
+            }
+            KeyCode::Char('[') => {
+                self.cycle_job(-1);
+                return;
+            }
+            KeyCode::Char(']') => {
+                self.cycle_job(1);
+                return;
+            }
+            KeyCode::Tab => {
+                self.goto((self.screen + 1) % 8);
+                return;
+            }
+            KeyCode::BackTab => {
+                self.goto((self.screen + 7) % 8);
+                return;
+            }
             _ => {}
         }
 
@@ -895,7 +1365,6 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
                 KeyCode::Enter | KeyCode::Char('n') => self.goto(self.sidebar_cursor),
                 KeyCode::Char('l') | KeyCode::Right => {
                     self.goto(self.sidebar_cursor);
-                    // focus stays on left panel (options) by default
                 }
                 KeyCode::Char('h') | KeyCode::Left => {}
                 _ => {}
@@ -947,11 +1416,50 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
             KeyCode::Enter => self.activate(),
             KeyCode::Char('/') if self.screen == 1 => self.prompt("Filtrar", self.filter.clone(), PKind::Filter),
             KeyCode::Char('a') if self.screen == 1 => self.open_menu(),
-            KeyCode::Char('p') if self.screen == 1 => self.trigger(&GAME_ACTS[0]),
-            KeyCode::Char('o') if self.screen == 1 => self.trigger(&GAME_ACTS[1]),
-            KeyCode::Char('I') if self.screen == 1 => self.trigger(&GAME_ACTS[2]),
-            KeyCode::Char('u') if self.screen == 1 => self.trigger(&GAME_ACTS[3]),
-            KeyCode::Char('K') if self.screen == 1 => self.trigger(&GAME_ACTS[7]),
+            KeyCode::Char('p') if self.screen == 1 => {
+                if let Some(a) = game_act("Jugar") {
+                    self.trigger(a)
+                }
+            }
+            KeyCode::Char('o') if self.screen == 1 => {
+                if let Some(a) = game_act("Jugar con opciones…") {
+                    self.trigger(a)
+                }
+            }
+            KeyCode::Char('I') if self.screen == 1 => {
+                if let Some(a) = game_act("Instalar") {
+                    self.trigger(a)
+                }
+            }
+            KeyCode::Char('u') if self.screen == 1 => {
+                if let Some(a) = game_act("Actualizar") {
+                    self.trigger(a)
+                }
+            }
+            KeyCode::Char('K') if self.screen == 1 => {
+                if let Some(a) = game_act("Información") {
+                    self.trigger(a)
+                }
+            }
+            KeyCode::Char('F') if self.screen == 1 => {
+                let id = match self.selected_game() {
+                    Some(g) => g.id.clone(),
+                    None => {
+                        self.msg = "Elige un juego primero".into();
+                        return;
+                    }
+                };
+                match self.game_dir(&id) {
+                    Some(d) => self.open_files(PathBuf::from(d)),
+                    None => self.msg = "Este juego no está instalado (no hay carpeta conocida).".into(),
+                }
+            }
+            KeyCode::Char('D') if self.screen == 1 => {
+                if let Some(g) = self.selected_game() {
+                    let id = g.id.clone();
+                    self.start_disk_info(id);
+                }
+            }
             KeyCode::Char('i') if self.screen == 1 => {
                 self.only_inst = !self.only_inst;
                 self.cursor[1] = 0;
@@ -1008,34 +1516,17 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
     }
 }
 
-fn fmt_progress(v: &Value) -> String {
-    let mut s = String::new();
-    let mut pct: Option<f64> = None;
-    for key in ["total_bytes", "bytes_total", "total", "download_total"] {
-        if let Some(tot) = v.get(key).and_then(|x| x.as_f64()) {
-            if tot > 0.0 {
-                pct = v
-                    .get("bytes_downloaded")
-                    .and_then(|x| x.as_f64())
-                    .map(|b| b / tot * 100.0);
-                break;
-            }
-        }
+pub fn load_entries(path: &Path) -> std::io::Result<Vec<FileEntry>> {
+    let mut v = vec![];
+    for e in std::fs::read_dir(path)? {
+        let Ok(e) = e else { continue };
+        let p = e.path();
+        let md = std::fs::symlink_metadata(&p).ok();
+        let is_dir = md.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+        let size = md.as_ref().map(|m| m.len()).unwrap_or(0);
+        let name = e.file_name().to_string_lossy().to_string();
+        v.push(FileEntry { name, path: p, is_dir, size });
     }
-    if let Some(b) = v.get("bytes_downloaded").and_then(|x| x.as_f64()) {
-        s += &format!("{:.1} MB", b / 1_048_576.0);
-    }
-    if let Some(b) = v.get("speed_bps").and_then(|x| x.as_f64()) {
-        s += &format!(" · {:.1} MB/s", b / 1_048_576.0);
-    }
-    if let Some(e) = v.get("eta_seconds").and_then(|x| x.as_f64()) {
-        s += &format!(" · ETA {}s", e as u64);
-    }
-    if let Some(p) = pct {
-        s = format!("{:.0}% · {}", p.min(100.0), s);
-    }
-    if s.is_empty() {
-        s = v.to_string();
-    }
-    s
+    v.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    Ok(v)
 }

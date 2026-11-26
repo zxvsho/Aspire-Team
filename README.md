@@ -114,14 +114,18 @@ Variable `ASPIRE_AURELIA_BIN` para usar otro binario de aurelia.
 | `u` | actualizar |
 | `K` | información |
 | `a` | menú completo del juego |
+| `F` | explorar archivos del juego |
+| `D` | tamaño y disco |
+| `X` | juegos en ejecución (detener) |
+| `U` | URLs detectadas en el navegador |
 
 ## Temas
 
-`T` abre el selector. Incluye 11 temas:
+`T` abre el selector. Incluye 15 temas:
 
 ```
-Retro82 · Terminal · Sistema · Ambar · Synthwave84 · Commodore64
-Gruvbox · Nord · Dracula · TokyoNight · Catppuccin Mocha
+Retro82 · Terminal · Sistema · Everforest · Miasma · Kanagawa · Material · Synthwave84
+Osaka Jade · Ambar · Gruvbox · Nord · Dracula · TokyoNight · Catppuccin Mocha
 ```
 
 - **Terminal**: usa la paleta ANSI de tu terminal.
@@ -137,6 +141,26 @@ Pon tu logo en ASCII/texto plano en `~/.config/aspire-team/logo.txt` (se muestra
 
 Biblioteca → Enter → «Aplicar parche/mod local»: copia una carpeta sobre el juego con respaldo en `.aspire-backup/`; «Revertir» lo deshace.
 `aurelia verify` restaura los archivos originales.
+
+## Salida organizada
+
+- El panel derecho muestra cada comando como **tarjetas y tablas en español**, no líneas crudas. `v` alterna la vista cruda.
+- Las descargas muestran **barra y porcentaje** (sin volcar todas las líneas).
+- Los errores se explican con **causa y sugerencia** en español (mapea los tipos de Aurelia: `auth_required`, `source_changed`, `rate_limited`, `disk_full`, `offline`, etc.).
+- Al cerrar la app se terminan los procesos propios; los juegos lanzados con `play` se conservan.
+
+## Herramientas de juego
+
+- **Abrir carpeta de instalación**, **explorar archivos** (navegar, abrir, borrar con confirmación), **tamaño y disco** (cuánto ocupa, en qué disco y espacio libre), **carpeta de guardados**, **prefijo de Wine**, **página del juego en Steam**.
+- **Parches en español o mods**: copia una carpeta sobre el juego con respaldo en `.aspire-backup/`; «Restaurar» lo deshace.
+
+## Extensiones (Linux)
+
+Complementos → Extensiones: estado / instalar paquete / abrir Goverlay / ProtonUp-Qt. Activa por juego MangoHud (`mangohud`), GameMode (`gamemoderun`) y vkBasalt (`ENABLE_VKBASALT=1`) desde el menú del juego (Parámetros de lanzamiento).
+
+## Inicio de sesión
+
+Si no hay sesión de Steam, la app arranca en **Sistema → Iniciar sesión** (overlay de login) y no permite continuar hasta iniciar sesión.
 
 ## Acerca de Aurelia
 

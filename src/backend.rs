@@ -2,8 +2,115 @@ use serde_json::Value;
 use std::{
     io::{BufRead, BufReader},
     process::{Command, Stdio},
-    sync::mpsc::Sender,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::Sender,
+        Arc, Mutex, OnceLock,
+    },
+    time::Duration,
 };
+
+/// Procesos hijos vivos, para terminarlos cuando se cierra la app.
+struct Proc {
+    pid: u32,
+    keep: bool,
+    alive: Arc<AtomicBool>,
+}
+
+fn procs() -> &'static Mutex<Vec<Proc>> {
+    static PROCS: OnceLock<Mutex<Vec<Proc>>> = OnceLock::new();
+    PROCS.get_or_init(|| Mutex::new(vec![]))
+}
+
+fn register(pid: u32, keep: bool) -> Arc<AtomicBool> {
+    let alive = Arc::new(AtomicBool::new(true));
+    if let Ok(mut g) = procs().lock() {
+        g.push(Proc { pid, keep, alive: alive.clone() });
+    }
+    alive
+}
+
+#[cfg(unix)]
+fn terminate(pid: u32, force: bool) {
+    let target = format!("-{pid}");
+    let sig = if force { "-KILL" } else { "-TERM" };
+    let _ = Command::new("kill")
+        .args([sig, target.as_str()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+#[cfg(windows)]
+fn terminate(pid: u32, _force: bool) {
+    let _ = Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
+/// Alguna vez se lanzó un juego con `play`: el demonio debe seguir vivo para
+/// que el juego no se cierre al salir de la interfaz.
+static PLAY_LAUNCHED: AtomicBool = AtomicBool::new(false);
+
+/// Termina los trabajos propios al salir (los juegos lanzados con `play` se
+/// dejan abiertos) y apaga el demonio de sesión si no queda nada vivo.
+pub fn shutdown() {
+    let items: Vec<(u32, bool)> = {
+        let Ok(mut g) = procs().lock() else { return };
+        g.retain(|p| p.alive.load(Ordering::Relaxed));
+        g.iter().map(|p| (p.pid, p.keep)).collect()
+    };
+    let victims: Vec<u32> = items.iter().filter(|(_, k)| !*k).map(|(p, _)| *p).collect();
+    for pid in &victims {
+        terminate(*pid, false);
+    }
+    if !victims.is_empty() {
+        std::thread::sleep(Duration::from_millis(180));
+        for pid in &victims {
+            terminate(*pid, true);
+        }
+    }
+    if !PLAY_LAUNCHED.load(Ordering::Relaxed) {
+        let _ = Command::new(bin())
+            .args(["daemon", "stop"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+fn stream(mut child: std::process::Child, job: usize, tx: Sender<Msg>) -> (Option<i32>, String) {
+    let out = child.stdout.take();
+    let err = child.stderr.take();
+    let h_out = out.map(|out| {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            for l in BufReader::new(out).lines().map_while(Result::ok) {
+                buf.push_str(&l);
+                buf.push('\n');
+                let _ = tx.send(Msg::Line { job, err: false, text: l });
+            }
+            buf
+        })
+    });
+    let h_err = err.map(|err| {
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            for l in BufReader::new(err).lines().map_while(Result::ok) {
+                let _ = tx.send(Msg::Line { job, err: true, text: l });
+            }
+        })
+    });
+    let stdout = h_out.and_then(|h| h.join().ok()).unwrap_or_default();
+    if let Some(h) = h_err {
+        let _ = h.join();
+    }
+    let code = child.wait().ok().and_then(|s| s.code());
+    (code, stdout)
+}
 
 pub fn bin() -> String {
     std::env::var("ASPIRE_AURELIA_BIN").unwrap_or_else(|_| "aurelia".into())
@@ -17,14 +124,26 @@ pub enum Msg {
 /// Ejecuta `aurelia --json <args>` en segundo plano, enviando cada línea al canal.
 pub fn spawn_job(job: usize, args: Vec<String>, tx: Sender<Msg>) {
     std::thread::spawn(move || {
-        let spawned = Command::new(bin())
-            .arg("--json")
-            .args(&args)
+        let first = args.first().cloned().unwrap_or_default();
+        // `play` se deja abierto al cerrar la app y no se fuerza a JSON.
+        let keep = first == "play";
+        if keep {
+            PLAY_LAUNCHED.store(true, Ordering::Relaxed);
+        }
+        let mut cmd = Command::new(bin());
+        if !keep && !args.iter().any(|a| a == "--json" || a == "-j") {
+            cmd.arg("--json");
+        }
+        cmd.args(&args)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn();
-        let mut child = match spawned {
+            .stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        let child = match cmd.spawn() {
             Ok(c) => c,
             Err(e) => {
                 let _ = tx.send(Msg::Line { job, err: true, text: format!("no se pudo ejecutar `{}`: {e}", bin()) });
@@ -32,27 +151,38 @@ pub fn spawn_job(job: usize, args: Vec<String>, tx: Sender<Msg>) {
                 return;
             }
         };
-        let out = child.stdout.take().unwrap();
-        let err = child.stderr.take().unwrap();
-        let tx_out = tx.clone();
-        let h_out = std::thread::spawn(move || {
-            let mut buf = String::new();
-            for l in BufReader::new(out).lines().map_while(Result::ok) {
-                buf.push_str(&l);
-                buf.push('\n');
-                let _ = tx_out.send(Msg::Line { job, err: false, text: l });
+        let alive = register(child.id(), keep);
+        let (code, stdout) = stream(child, job, tx.clone());
+        alive.store(false, Ordering::Relaxed);
+        let _ = tx.send(Msg::Done { job, code, stdout });
+    });
+}
+
+/// Ejecuta un comando de shell local (tamaño en disco, estado de extensiones…).
+pub fn spawn_shell(job: usize, command: String, tx: Sender<Msg>) {
+    std::thread::spawn(move || {
+        let mut cmd = Command::new("bash");
+        cmd.arg("-c")
+            .arg(&command)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            cmd.process_group(0);
+        }
+        let child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = tx.send(Msg::Line { job, err: true, text: format!("no se pudo ejecutar el comando: {e}") });
+                let _ = tx.send(Msg::Done { job, code: Some(1), stdout: String::new() });
+                return;
             }
-            buf
-        });
-        let tx_err = tx.clone();
-        let h_err = std::thread::spawn(move || {
-            for l in BufReader::new(err).lines().map_while(Result::ok) {
-                let _ = tx_err.send(Msg::Line { job, err: true, text: l });
-            }
-        });
-        let stdout = h_out.join().unwrap_or_default();
-        let _ = h_err.join();
-        let code = child.wait().ok().and_then(|s| s.code());
+        };
+        let alive = register(child.id(), false);
+        let (code, stdout) = stream(child, job, tx.clone());
+        alive.store(false, Ordering::Relaxed);
         let _ = tx.send(Msg::Done { job, code, stdout });
     });
 }
@@ -82,6 +212,15 @@ where
 
 /// Comandos que piden teclado (login, chat…): se ejecutan con la terminal completa.
 pub fn run_interactive(args: &[String]) -> std::io::Result<()> {
+    if args.first().map(|s| s.as_str()) == Some("__shell") {
+        if let Some(cmd) = args.get(1) {
+            let status = Command::new("bash").arg("-c").arg(cmd).status()?;
+            println!("\n[terminó con código {}] — pulsa Enter para volver…", status.code().unwrap_or(-1));
+            let mut s = String::new();
+            std::io::stdin().read_line(&mut s)?;
+        }
+        return Ok(());
+    }
     if args.first().map(|s| s.as_str()) == Some("self-update") {
         // Actualizar Aspire-Team desde GitHub
         let script = r#"
@@ -158,15 +297,19 @@ pub fn parse_result(out: &str) -> Option<Value> {
         return None;
     }
     if let Ok(v) = serde_json::from_str::<Value>(t) {
+        if v.get("event").and_then(|e| e.as_str()) == Some("progress") {
+            return None;
+        }
         return Some(v);
     }
     let mut last = None;
     for l in t.lines() {
         if let Ok(v) = serde_json::from_str::<Value>(l.trim()) {
-            if v.get("event").and_then(|e| e.as_str()) == Some("result") {
-                return Some(v);
+            match v.get("event").and_then(|e| e.as_str()) {
+                Some("result") => return Some(v),
+                Some("progress") => continue,
+                _ => last = Some(v),
             }
-            last = Some(v);
         }
     }
     last
@@ -222,54 +365,6 @@ pub fn install_dir(g: &Game) -> Option<String> {
         .iter()
         .find_map(|k| g.raw.get(k).and_then(|x| x.as_str()).map(|s| s.to_string()))
         .filter(|s| !s.is_empty())
-}
-
-fn show(v: &Value) -> String {
-    match v {
-        Value::String(s) => s.clone(),
-        Value::Null => "—".into(),
-        other => other.to_string(),
-    }
-}
-
-/// Aplana un JSON a líneas (sangría, clave, valor) para mostrarlo legible.
-pub fn flatten(v: &Value, indent: usize, out: &mut Vec<(usize, String, String)>) {
-    match v {
-        Value::Object(m) => {
-            for (k, x) in m {
-                if indent == 0 && (k == "event" || k == "schema") {
-                    continue;
-                }
-                match x {
-                    Value::Object(_) | Value::Array(_) => {
-                        out.push((indent, k.clone(), String::new()));
-                        flatten(x, indent + 1, out);
-                    }
-                    _ => out.push((indent, k.clone(), show(x))),
-                }
-            }
-        }
-        Value::Array(a) => {
-            for (i, x) in a.iter().enumerate() {
-                if i >= 300 {
-                    out.push((indent, "…".into(), format!("{} más (usa la vista cruda con `v`)", a.len() - 300)));
-                    break;
-                }
-                match x {
-                    Value::Object(m) if m.values().all(|y| !y.is_object() && !y.is_array()) => {
-                        let line = m.iter().map(|(k, y)| format!("{k}: {}", show(y))).collect::<Vec<_>>().join("  ·  ");
-                        out.push((indent, "•".into(), line));
-                    }
-                    Value::Object(_) | Value::Array(_) => {
-                        out.push((indent, "•".into(), String::new()));
-                        flatten(x, indent + 1, out);
-                    }
-                    _ => out.push((indent, "•".into(), show(x))),
-                }
-            }
-        }
-        other => out.push((indent, String::new(), show(other))),
-    }
 }
 
 /// Divide como una shell sencilla (respeta comillas dobles/simples).

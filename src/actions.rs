@@ -10,6 +10,16 @@ pub enum Mode {
     Patch,
     Revert,
     Pick,
+    OpenDir,
+    Browse,
+    Saves,
+    OpenPrefix,
+    OpenUrl,
+    DiskInfo,
+    LaunchPrefix,
+    Shell,
+    ShellInteractive,
+    ExtStatus,
 }
 
 pub struct Act {
@@ -45,6 +55,18 @@ const fn iq(label: &'static str, args: &'static str, ask: &'static str, tip: &'s
 const fn m(label: &'static str, mode: Mode, ask: Option<&'static str>, tip: &'static str) -> Act {
     Act { label, args: "", ask, game: true, mode, tip }
 }
+/// Acción sobre el juego seleccionado sin argumentos.
+const fn gm(label: &'static str, mode: Mode, tip: &'static str) -> Act {
+    Act { label, args: "", ask: None, game: true, mode, tip }
+}
+/// Prefijo de opciones de lanzamiento (`mangohud`, `gamemoderun`, …).
+const fn gp(label: &'static str, prefix: &'static str, tip: &'static str) -> Act {
+    Act { label, args: prefix, ask: None, game: true, mode: Mode::LaunchPrefix, tip }
+}
+/// Comando de shell con la terminal completa (sudo, instaladores).
+const fn shi(label: &'static str, cmd: &'static str, tip: &'static str) -> Act {
+    Act { label, args: cmd, ask: None, game: false, mode: Mode::ShellInteractive, tip }
+}
 
 /// Menú de un juego (Enter o `a` en Biblioteca).
 pub const GAME_ACTS: &[Act] = &[
@@ -76,8 +98,14 @@ pub const GAME_ACTS: &[Act] = &[
     gq("Degradar versión (parche)", "downgrade {app} --depot {1} --manifest {2}", "Depot Manifiesto", "Instala una build anterior y la fija"),
     g("Fijar versión", "pin {app}", "Bloquea actualizaciones"),
     g("Soltar versión", "unpin {app}", "Permite actualizar de nuevo"),
-    m("Aplicar parche/mod local (carpeta)", Mode::Patch, Some("Carpeta del parche o mod"), "Copia la carpeta sobre el juego con respaldo"),
-    m("Revertir último parche local", Mode::Revert, None, "Restaura los archivos respaldados"),
+    gm("Abrir carpeta de instalación", Mode::OpenDir, "Abre la carpeta del juego en el gestor de archivos"),
+    gm("Explorar archivos del juego", Mode::Browse, "Navega, abre o borra archivos del juego (F en Biblioteca)"),
+    gm("Tamaño y disco", Mode::DiskInfo, "Cuánto ocupa, en qué disco y cuánto espacio queda (D)"),
+    gm("Abrir carpeta de guardados", Mode::Saves, "Abre los guardados sincronizados por Steam"),
+    gm("Abrir prefijo de Wine", Mode::OpenPrefix, "Carpeta del prefijo (compatdata) del juego"),
+    gm("Página del juego en Steam", Mode::OpenUrl, "Abre la ficha del juego en el navegador"),
+    m("Parche en español o mod (carpeta)", Mode::Patch, Some("Carpeta del parche o mod"), "Copia el parche sobre el juego con respaldo en .aspire-backup"),
+    m("Restaurar archivos originales", Mode::Revert, None, "Restaura lo que copió el último parche local"),
     g("Workshop: explorar", "workshop browse {app}", "Descubre mods del Workshop"),
     g("Workshop: estado", "workshop status {app}", "Instalados vs suscritos"),
     gq("Workshop: instalar item", "workshop install {}", "ID del item", "Descarga un item o colección"),
@@ -145,8 +173,8 @@ const MODS: &[Act] = &[
     q("Workshop: valorar", "workshop rate {1} {2}", "ID-item up|down", "Pulgar arriba o abajo"),
     q("Workshop: comentarios", "workshop comments {}", "ID del item", "Lee comentarios"),
     q("Workshop: comentar", "workshop comment {1} {2..}", "ID-item texto", "Publica un comentario"),
-    m("Aplicar parche/mod local (carpeta)", Mode::Patch, Some("Carpeta del parche o mod"), "Requiere juego elegido en Biblioteca; con respaldo"),
-    m("Revertir último parche local", Mode::Revert, None, "Requiere juego elegido en Biblioteca"),
+    m("Parche en español o mod (carpeta)", Mode::Patch, Some("Carpeta del parche o mod"), "Requiere juego elegido en Biblioteca; copia con respaldo"),
+    m("Restaurar archivos originales", Mode::Revert, None, "Requiere juego elegido en Biblioteca"),
     q("Manifiestos (versiones)", "manifests {}", "AppID", "Manifiestos por depot y rama"),
     q("Degradar a versión", "downgrade {1} --depot {2} --manifest {3}", "AppID depot manifiesto", "Manifiestos antiguos: steamdb.info"),
     q("Fijar versión", "pin {}", "AppID", "Bloquea actualizaciones"),
@@ -191,6 +219,39 @@ const PLUGINS: &[Act] = &[
     q("Steam runtime: política", "config steam-runtime-policy {}", "auto | on | off", "Cuándo usar el Steam en Wine"),
     q("Shader precache", "config shader-precache {}", "auto | off", "Precompilar shaders Vulkan"),
     q("Precompilar shaders de un juego", "shaders {}", "AppID", "Linux: ahora mismo"),
+    // ---- Extensiones del sistema (MangoHud, Goverlay, vkBasalt, GameMode…) ----
+    Act {
+        label: "Extensiones: estado",
+        args: "",
+        ask: None,
+        game: false,
+        mode: Mode::ExtStatus,
+        tip: "Comprueba MangoHud, Goverlay, vkBasalt, GameMode, Gamescope y ProtonUp-Qt",
+    },
+    shi(
+        "Extensiones: instalar paquete",
+        crate::tools::EXT_INSTALL,
+        "Instala MangoHud, Goverlay, vkBasalt, GameMode y Gamescope con sudo",
+    ),
+    shi(
+        "Extensiones: abrir Goverlay",
+        crate::tools::EXT_GOVERLAY,
+        "Interfaz gráfica para configurar MangoHud y vkBasalt",
+    ),
+    shi(
+        "ProtonUp-Qt: instalar",
+        crate::tools::EXT_PROTONUP,
+        "Descarga Proton-GE y Wine-GE fácilmente (Flatpak o paquete)",
+    ),
+    shi(
+        "ProtonUp-Qt / ProtonPlus: abrir",
+        crate::tools::EXT_PROTONMANAGER,
+        "Abre el gestor de versiones de Proton",
+    ),
+    gp("MangoHud: activar en este juego", "mangohud", "Añade `mangohud %command%` a las opciones de lanzamiento"),
+    gp("MangoHud: desactivar en este juego", "!mangohud", "Quita MangoHud de las opciones de lanzamiento"),
+    gp("GameMode: activar en este juego", "gamemoderun", "Añade `gamemoderun %command%` (requiere GameMode)"),
+    gp("vkBasalt: activar en este juego", "ENABLE_VKBASALT=1", "Activa vkBasalt con una variable de entorno"),
 ];
 
 const SOCIAL: &[Act] = &[
@@ -250,6 +311,11 @@ pub fn acts_for(screen: usize) -> &'static [Act] {
         7 => SYSTEM,
         _ => &[],
     }
+}
+
+/// Busca una acción del menú de un juego por su etiqueta.
+pub fn game_act(label: &str) -> Option<&'static Act> {
+    GAME_ACTS.iter().find(|a| a.label == label)
 }
 
 pub fn build_args(tpl: &str, app: Option<&str>, input: &str) -> Vec<String> {
