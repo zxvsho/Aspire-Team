@@ -81,7 +81,7 @@ pub const GAME_ACTS: &[Act] = &[
     g("Parámetros de lanzamiento", "config game {app}", "Ver/fijar --platform, Proton, launch-options…"),
     g("Información", "info {app}", "Descripción, reseñas, etiquetas, DLC"),
     g("Información extendida", "info {app} --extended", "Requisitos, Metacritic, géneros"),
-    g("DLC", "dlc {app}", "DLC con propiedad e instalación"),
+    g("DLC", "dlc {app}", "DLC con propiedad e instalación (el nombre se consulta a Steam; si falta, se muestra el AppID)"),
     Act {
         label: "Instalar DLCs propios",
         args: "python3 - \"{app}\" <<'PY'\nimport subprocess, json, sys\napp = sys.argv[1]\ntry:\n    out = subprocess.check_output(['aurelia','dlc',app,'--json'], text=True)\n    data = json.loads(out)\nexcept Exception as e:\n    print('No pude leer los DLC:', e)\n    sys.exit(1)\ndlcs = data.get('dlc', []) if isinstance(data, dict) else []\nowned = [d for d in dlcs if d.get('owned') and not d.get('installed')]\nif not owned:\n    print('No hay DLC propios pendientes de instalar.')\n    sys.exit(0)\nfor d in owned:\n    aid = d.get('app_id')\n    name = d.get('name') or aid\n    print(f'Instalando DLC: {name} ({aid})')\n    subprocess.run(['aurelia','--json','install',str(aid)])\nprint('Listo.')\nPY",

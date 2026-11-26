@@ -408,31 +408,61 @@ fn fmt_val(k: &str, v: &Value) -> String {
                 n.to_string()
             }
         }
-        Value::Array(a) => a
-            .iter()
-            .filter_map(|x| match x {
-                Value::String(s) if !s.is_empty() => Some(s.clone()),
-                Value::Number(n) => Some(n.to_string()),
-                Value::Object(o) => o
-                    .get("name")
-                    .or_else(|| o.get("title"))
-                    .and_then(|x| x.as_str())
-                    .map(|s| s.to_string()),
-                _ => None,
-            })
-            .take(10)
-            .collect::<Vec<_>>()
-            .join(", "),
+        Value::Array(a) => {
+            let mut parts: Vec<String> = vec![];
+            for x in a.iter().take(12) {
+                match x {
+                    Value::String(s) if !s.is_empty() => parts.push(s.clone()),
+                    Value::Number(n) => parts.push(n.to_string()),
+                    Value::Object(o) => {
+                        if let Some(n) = o.get("name").or_else(|| o.get("title")).and_then(|x| x.as_str()) {
+                            parts.push(n.to_string());
+                        } else if let Some(d) = o.get("descriptors").and_then(|x| x.as_array()) {
+                            parts.push(d.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", "));
+                        } else {
+                            let mut bits = vec![];
+                            for (k, v) in o {
+                                if v.is_object() || v.is_array() { continue; }
+                                let s = fmt_val(k, v);
+                                if !s.is_empty() && s != "—" {
+                                    bits.push(format!("{}: {}", label(k), s));
+                                }
+                            }
+                            if !bits.is_empty() {
+                                parts.push(bits.join(", "));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if a.len() > 12 {
+                parts.push(format!("… y {} más", a.len() - 12));
+            }
+            parts.join(", ")
+        }
         Value::Object(o) => {
             if let Some(d) = o.get("descriptors").and_then(|x| x.as_array()) {
                 d.iter()
                     .filter_map(|x| x.as_str())
                     .collect::<Vec<_>>()
                     .join(", ")
-            } else if let Some(n) = o.get("name").and_then(|x| x.as_str()) {
+            } else if let Some(n) = o.get("name").or_else(|| o.get("title")).and_then(|x| x.as_str()) {
                 n.to_string()
             } else {
-                v.to_string()
+                let mut bits = vec![];
+                for (k, v) in o {
+                    if v.is_object() || v.is_array() { continue; }
+                    let s = fmt_val(k, v);
+                    if !s.is_empty() && s != "—" {
+                        bits.push(format!("{}: {}", label(k), s));
+                    }
+                }
+                if bits.is_empty() {
+                    "—".into()
+                } else {
+                    bits.join(" · ")
+                }
             }
         }
     }
@@ -1856,11 +1886,24 @@ fn generic(v: &Value, t: &Theme, width: u16) -> Vec<Line<'static>> {
 fn obj_card(o: &serde_json::Map<String, Value>, t: &Theme, width: u16) -> Vec<Line<'static>> {
     let title_key = ["name", "title", "persona_name", "description", "app_id", "id"]
         .iter()
-        .find(|k| o.get(**k).is_some())
+        .find(|k| {
+            o.get(**k).map(|v| match v {
+                Value::Null => false,
+                Value::String(x) => !x.is_empty(),
+                _ => true,
+            }).unwrap_or(false)
+        })
         .copied();
     let title = title_key
         .and_then(|k| o.get(k))
-        .map(|x| fmt_val(title_key.unwrap_or(""), x))
+        .map(|x| {
+            let raw = fmt_val(title_key.unwrap_or(""), x);
+            if title_key == Some("app_id") || title_key == Some("id") {
+                format!("DLC / AppID {raw}")
+            } else {
+                raw
+            }
+        })
         .unwrap_or_else(|| "Elemento".into());
     let interesting = [
         "app_id", "price", "discount_pct", "reviews", "type", "platform", "country", "state", "installed",
