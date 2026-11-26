@@ -1047,7 +1047,7 @@ fn dlc_view(v: &Value, t: &Theme, width: u16) -> Vec<Line<'static>> {
     let mut out = vec![note(&format!("{} DLC", a.len()), t), blank()];
     for x in a.iter().take(MAX_ROWS) {
         let id = sget(x, &["app_id"]).unwrap_or_default();
-        let name = sget(x, &["name"]).unwrap_or_else(|| "(nombre no disponible)".into());
+        let name = sget(x, &["name"]).unwrap_or_else(|| format!("DLC #{}", id));
         let owned = get(x, &["owned"]).and_then(|x| x.as_bool()).unwrap_or(false);
         let installed = get(x, &["installed"]).and_then(|x| x.as_bool()).unwrap_or(false);
         let price = sget(x, &["price"]).unwrap_or_else(|| "—".into());
