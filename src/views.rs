@@ -1075,6 +1075,8 @@ fn dlc_view(v: &Value, t: &Theme, width: u16) -> Vec<Line<'static>> {
         return vec![note("Este juego no tiene DLC.", t)];
     }
     let mut out = vec![note(&format!("{} DLC", a.len()), t), blank()];
+    out.push(note("Si un DLC no tiene nombre, Steam no lo proporciona; se muestra su AppID.", t));
+    out.push(blank());
     for x in a.iter().take(MAX_ROWS) {
         let id = sget(x, &["app_id"]).unwrap_or_default();
         let name = sget(x, &["name"]).unwrap_or_else(|| format!("DLC #{}", id));
@@ -1355,7 +1357,26 @@ fn info_view(v: &Value, t: &Theme, width: u16) -> Vec<Line<'static>> {
             kv("trailers", Some(format!("{} tráilers", tr.len())));
         }
     }
+    if let Some(lk) = get(v, &["links"]).and_then(|x| x.as_array()) {
+        if !lk.is_empty() {
+            kv("links", Some(format!("{} enlaces", lk.len())));
+        }
+    }
     kv("store_url", sget(v, &["store_url"]));
+    if let Some(fd) = sget(v, &["full_description"]) {
+        drop(kv);
+        let fd = strip_html(&fd);
+        if !fd.is_empty() {
+            let orig = sget(v, &["description", "short_description"]).map(|d| strip_html(&d));
+            if orig.as_deref() != Some(fd.as_str()) {
+                out.push(blank());
+                out.push(section("Descripción completa", t));
+                for l in wrap(&fd, w) {
+                    out.push(Line::from(vec![Span::raw("  "), Span::styled(l, st(t.fg))]));
+                }
+            }
+        }
+    }
     if let Some(desc) = sget(v, &["description", "short_description"]) {
         let desc = strip_html(&desc);
         if !desc.is_empty() {
@@ -1756,8 +1777,12 @@ fn user_view(v: &Value, t: &Theme, width: u16) -> Vec<Line<'static>> {
     for k in [
         "steam_id",
         "location",
+        "headline",
+        "visibility",
         "is_public",
         "is_limited",
+        "privacy_state",
+        "ban_expires",
         "created",
         "last_logoff",
         "profile_url",
