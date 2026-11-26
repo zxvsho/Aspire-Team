@@ -119,18 +119,22 @@ fn draw_output(f: &mut Frame, a: Rect, app: &mut App, t: &Theme, focus: bool) {
                     }
                 }
                 _ => {
-                    let raw: Vec<(bool, String)> = j.lines.iter().rev().take(2000).cloned().collect::<Vec<_>>().into_iter().rev().collect();
-                    let mut last_blank = true;
-                    for (e, l) in raw {
-                        let txt = l.trim_end().to_string();
-                        if txt.trim().is_empty() {
-                            if !last_blank {
-                                lines.push(Line::raw(""));
+                    // Descargando con progreso: no muestra las líneas crudas, solo el progreso
+                    let running_with_progress = !j.done && !j.progress.is_empty();
+                    if app.raw || !running_with_progress {
+                        let raw: Vec<(bool, String)> = j.lines.iter().rev().take(2000).cloned().collect::<Vec<_>>().into_iter().rev().collect();
+                        let mut last_blank = true;
+                        for (e, l) in raw {
+                            let txt = l.trim_end().to_string();
+                            if txt.trim().is_empty() {
+                                if !last_blank {
+                                    lines.push(Line::raw(""));
+                                }
+                                last_blank = true;
+                            } else {
+                                lines.push(Line::styled(txt, Style::new().fg(if e { t.warn } else { t.fg })));
+                                last_blank = false;
                             }
-                            last_blank = true;
-                        } else {
-                            lines.push(Line::styled(txt, Style::new().fg(if e { t.warn } else { t.fg })));
-                            last_blank = false;
                         }
                     }
                 }

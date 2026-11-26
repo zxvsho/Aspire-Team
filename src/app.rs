@@ -1010,6 +1010,18 @@ pub fn on_mouse(&mut self, m: ratatui::crossterm::event::MouseEvent, size: (u16,
 
 fn fmt_progress(v: &Value) -> String {
     let mut s = String::new();
+    let mut pct: Option<f64> = None;
+    for key in ["total_bytes", "bytes_total", "total", "download_total"] {
+        if let Some(tot) = v.get(key).and_then(|x| x.as_f64()) {
+            if tot > 0.0 {
+                pct = v
+                    .get("bytes_downloaded")
+                    .and_then(|x| x.as_f64())
+                    .map(|b| b / tot * 100.0);
+                break;
+            }
+        }
+    }
     if let Some(b) = v.get("bytes_downloaded").and_then(|x| x.as_f64()) {
         s += &format!("{:.1} MB", b / 1_048_576.0);
     }
@@ -1018,6 +1030,9 @@ fn fmt_progress(v: &Value) -> String {
     }
     if let Some(e) = v.get("eta_seconds").and_then(|x| x.as_f64()) {
         s += &format!(" · ETA {}s", e as u64);
+    }
+    if let Some(p) = pct {
+        s = format!("{:.0}% · {}", p.min(100.0), s);
     }
     if s.is_empty() {
         s = v.to_string();
